@@ -1,0 +1,17 @@
+[package]
+name = "firmware-analyser"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name="firmware-analyser"
+test=false
+bench=false
+
+[dependencies]
+unicorn-engine = "2.0.0"
+libafl = { version = "*"}
+clap = { version = "4.0", features = ["derive"] }
+
+[build-dependencies]
+pkg-config = "0.3.16"

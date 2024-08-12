@@ -1,0 +1,3 @@
+[submodule "src/libafl"]
+	path = src/libafl
+	url = https://github.com/AFLplusplus/LibAFL.git
