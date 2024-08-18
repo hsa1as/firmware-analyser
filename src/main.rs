@@ -6,4 +6,5 @@ fn main() {
     if let Err(e) = run(args) {
         println!("Error: {e}");
     }
+    run();
 }
