@@ -2,6 +2,8 @@
 name = "firmware-analyser"
 version = "0.1.0"
 edition = "2021"
+authors = ["R Sai Ashwin <sai.ashwin2409@gmail.com"]
+description = "Automated firmware analysis suite"
 
 [[bin]]
 name="firmware-analyser"
@@ -12,6 +14,7 @@ bench=false
 unicorn-engine = "2.0.0"
 libafl = { version = "*"}
 clap = { version = "4.0", features = ["derive"] }
+ratatui = "0.28.0"
 
 [build-dependencies]
 pkg-config = "0.3.16"
