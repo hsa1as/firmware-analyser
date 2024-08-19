@@ -5,34 +5,47 @@
 #@menupath 
 #@toolbar 
 
-
-#TODO Add User Code Here
-
-
 ##################
 # Code for	 # 
 # Ghidrathon	 #
 ##################
 
-# Filename to write results to
-filename = askFile("Function Data File", "Okay").toString() 
-f = open(filename, "w+")
+import os
+
+# Set FIRMAL_DIR in env for output file location
+if 'FIRMAL_DIR' not in os.environ:
+	print("ERROR: env FIRMAL_DIR not set. Set FIRMAL_DIR for output directory")
+	exit(-1)
+
+import time
+timestr = time.strftime("%Y%m%d-%H%M%S")
+
+op_path = os.environ['FIRMAL_DIR']
+if op_path[-1] != "/":
+	op_path += "/"
 
 cp = currentProgram()
 
+filename = cp.getName() + "-" + timestr + ".csv"
+
+try:
+	f = open(filename, "w+")
+except:
+	print("ERROR: could not open file: " + filename)
+	exit(-1)
 
 # Ghidra requires analysis to be done in order to populate numAddresses
 # in function body objects. 
 # If analysis is not run, all function sizes are reported as 1
-# Uncomment for headless mode, to run analysis before our script runs
-# analyzeAll(cp)
+if 'ANALYZEALL' in os.environ:
+	analyzeAll(cp)
 
 # Get required objects from ghidra's java hell
 funcs = cp.getFunctionManager().getFunctions(True)
 addr = cp.getAddressFactory()
 mem = cp.getMemory()
 
-f.write(cp.getName() + "," + cp.getExecutablePath() +"\n")
+f.write(cp.getName() + "," + cp.getExecutablePath() + ", 0" +"\n")
 f.write("NAME,VADDR,FILEOFFSET,SIZE\n")
 
 # Gather and write results
