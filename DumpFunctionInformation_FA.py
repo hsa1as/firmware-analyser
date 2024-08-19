@@ -1,12 +1,12 @@
 # Dump function information for fuzzy hashing with firmware-analyser
 #@author "R Sai Ashwin"
 #@category _NEW_
-#@keybinding 
-#@menupath 
-#@toolbar 
+#@keybinding
+#@menupath
+#@toolbar
 
 ##################
-# Code for	 # 
+# Code for	 #
 # Ghidrathon	 #
 ##################
 
@@ -35,7 +35,7 @@ except:
 	exit(-1)
 
 # Ghidra requires analysis to be done in order to populate numAddresses
-# in function body objects. 
+# in function body objects.
 # If analysis is not run, all function sizes are reported as 1
 if 'ANALYZEALL' in os.environ:
 	analyzeAll(cp)
@@ -58,7 +58,7 @@ for func in funcs:
 	result["vaddr"] = "0x" + entrypoint.toString()
 	result["fileoffset"] = str(mem.getAddressSourceInfo(entrypoint).getFileOffset())
 	# For size to work, ghidra analysis should be run
-	# In case ghidra did not run analysis, the returned size is always 1	
+	# In case ghidra did not run analysis, the returned size is always 1
 	result["size"] = str(func.getBody().getNumAddresses())
 	f.write(result["name"] + "," + result["vaddr"] + "," + result["fileoffset"] + "," + result["size"] + "\n")
 
@@ -69,7 +69,7 @@ f.close()
 ###############################
 '''
 # Write code to dump all function names,
-# vaddr ( ghidra ) and file offsets 
+# vaddr ( ghidra ) and file offsets
 # for further analysis
 
 # Get all functions
@@ -84,7 +84,7 @@ funcs = currentProgram.functionManager.getFunctions(True)
 addr = currentProgram.addressFactory
 
 
-# get handle to program memory 
+# get handle to program memory
 mem = currentProgram.getMemory()
 
 # To convert address 0xcafecafe to file offset, we simply do

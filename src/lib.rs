@@ -44,6 +44,7 @@ impl FileInfo {
     fn init(self: &mut Self, f: &String) {
         self.name = f.clone();
         let mut file_obj = File::open(&self.name).expect("File not found");
+        // TODO: maybe mmap file contents instead of reading
         self.size = file_obj.metadata().expect("Could not read metadata").len();
         self.contents = vec![0; self.size as usize];
         file_obj
