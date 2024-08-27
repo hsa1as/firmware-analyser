@@ -10,39 +10,32 @@
 # Ghidrathon
 ##################
 
+import sqlite3
 import os
+import ssdeep
+import time
 
 # Set FIRMAL_DIR in env for output file location
 if 'FIRMAL_DIR' not in os.environ:
 	print("ERROR: env FIRMAL_DIR not set. Set FIRMAL_DIR for output directory")
 	exit(-1)
 
-import time
-timestr = time.strftime("%Y%m%d:%H%M%S")
-
 op_path = os.environ['FIRMAL_DIR']
 if op_path[-1] != "/":
 	op_path += "/"
 
-cp = currentProgram()
+timestr = time.strftime("%Y%m%d:%H%M%S")
 
+hashdb = sqlite3.connect(op_path + "hash.db")
+cur = hashdb.cursor()
+res = cur.execute("SELECT name FROM sqlite_master WHERE name='hashdump'")
+if(res.fetchone() is None):
+    cur.execute("CREATE TABLE hashdump(size, progname, progpath, funcname, vaddr, fileoff, hash)")
+
+cp = currentProgram()
 
 # Filename convention : prog_name-arch:endianness:64/32bit:compiler-spec-time.csv
 # Ex: analysis on libc shows: libc.so.6-x86:LE:64:default-20240821:141528.csv
-filename = cp.getName() + "-" + cp.getLanguageID().toString() + "-" + timestr + ".csv"
-
-try:
-	f = open(filename, "w+")
-except:
-	print("ERROR: could not open file: " + filename)
-	exit(-1)
-'''
-# Ghidra requires analysis to be done in order to populate numAddresses
-# in function body objects.
-# If analysis is not run, all function sizes are reported as 1
-if 'ANALYZEALL' in os.environ:
-	analyzeAll(cp)
-'''
 # Let script be run on headless mode with -noanalyse flag
 # Set minimum number of analysis options
 opts = getCurrentAnalysisOptionsAndValues(cp)
@@ -52,30 +45,38 @@ for x in opts:
 opts['Disassemble Entry Points.Respect Execute Flag'] = 'true'
 setAnalysisOptions(cp, opts)
 analyze(cp)
+
 # Get required objects from ghidra's java hell
 funcs = cp.getFunctionManager().getFunctions(True)
 addr = cp.getAddressFactory()
 mem = cp.getMemory()
 
-f.write(cp.getName() + "," + cp.getExecutablePath() + ", " + cp.getLanguageID().toString() + ", 0\n")
-f.write("NAME,VADDR,FILEOFFSET,SIZE\n")
-
 # Gather and write results
+data = []
 for func in funcs:
-	if(func.isThunk()):
-		continue
-	result = {}
-	result["name"] = func.getName()
-	entrypoint = func.getEntryPoint()
-	result["vaddr"] = "0x" + entrypoint.toString()
-	result["fileoffset"] = str(mem.getAddressSourceInfo(entrypoint).getFileOffset())
-	# For size to work, ghidra analysis should be run
-	# In case ghidra did not run analysis, the returned size is always 1
-	result["size"] = str(func.getBody().getNumAddresses())
-	f.write(result["name"] + "," + result["vaddr"] + "," + result["fileoffset"] + "," + result["size"] + "\n")
+    if(func.isThunk()):
+        continue
+    result = {}
+    result["name"] = func.getName()
+    entrypoint = func.getEntryPoint()
+    result["vaddr"] = "0x" + entrypoint.toString()
+    result["fileoffset"] = str(mem.getAddressSourceInfo(entrypoint).getFileOffset())
+# For size to work, ghidra analysis should be run
+# In case ghidra did not run analysis, the returned size is always 1
+    result["size"] = str(func.getBody().getNumAddresses())
+# Get function bytes out of a stupid java object
+    func_code = bytes(map(lambda b: b & 0xff, getBytes(entrypoint, int(result["size"]))))
+    result["hash"] = ssdeep.hash(func_code)
+    row = (result['size'], cp.getName(), cp.getExecutablePath(), result['name'], result['vaddr'], result['fileoffset'], result['hash'])
+    data.append(row)
+    if(len(data) > 1000):
+        cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
+        data.clear()
 
-f.close()
-
+cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
+data.clear()
+hashdb.commit()
+hashdb.close()
 ###############################
 #	Does not work	      #
 ###############################
