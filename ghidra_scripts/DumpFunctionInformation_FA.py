@@ -1,6 +1,6 @@
 # Dump function information for fuzzy hashing with firmware-analyser
 #@author "R Sai Ashwin"
-#@category _NEW_
+#@category Custom Scripts
 #@keybinding
 #@menupath
 #@toolbar
@@ -13,19 +13,18 @@
 import sqlite3
 import os
 import ssdeep
-import time
 
 # Set FIRMAL_DIR in env for output file location
 if 'FIRMAL_DIR' not in os.environ:
 	print("ERROR: env FIRMAL_DIR not set. Set FIRMAL_DIR for output directory")
 	exit(-1)
 
+# Database save path from environ
 op_path = os.environ['FIRMAL_DIR']
 if op_path[-1] != "/":
 	op_path += "/"
 
-timestr = time.strftime("%Y%m%d:%H%M%S")
-
+# Get conn to db and create table if it doesn't already exist
 hashdb = sqlite3.connect(op_path + "hash.db")
 cur = hashdb.cursor()
 res = cur.execute("SELECT name FROM sqlite_master WHERE name='hashdump'")
@@ -34,9 +33,6 @@ if(res.fetchone() is None):
 
 cp = currentProgram()
 
-# Filename convention : prog_name-arch:endianness:64/32bit:compiler-spec-time.csv
-# Ex: analysis on libc shows: libc.so.6-x86:LE:64:default-20240821:141528.csv
-# Let script be run on headless mode with -noanalyse flag
 # Set minimum number of analysis options
 opts = getCurrentAnalysisOptionsAndValues(cp)
 for x in opts:
@@ -77,29 +73,3 @@ cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
 data.clear()
 hashdb.commit()
 hashdb.close()
-###############################
-#	Does not work	      #
-###############################
-'''
-# Write code to dump all function names,
-# vaddr ( ghidra ) and file offsets
-# for further analysis
-
-# Get all functions
-funcs = currentProgram.functionManager.getFunctions(True)
-
-# Get required handles to convert vaddr to file offsets
-# Particularly useful in case currentProgram is NOT bare-metal
-# firmware, and is instead part of an ELF
-
-# Get addressFactory instance to convert addresses to ghidra's internal Address type
-# as required by getAddressSourceInfo
-addr = currentProgram.addressFactory
-
-
-# get handle to program memory
-mem = currentProgram.getMemory()
-
-# To convert address 0xcafecafe to file offset, we simply do
-# file_offset = mem.getAddressSourceInfo(addr.getAddress("0xcafecafe")).fileOffset
-'''
