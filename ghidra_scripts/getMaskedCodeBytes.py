@@ -1,6 +1,6 @@
 # Dump function information for fuzzy hashing with firmware-analyser
 #@author "R Sai Ashwin"
-#@category Custom Scripts
+#@category _NEW_
 #@keybinding
 #@menupath
 #@toolbar
@@ -13,44 +13,19 @@
 import sqlite3
 import os
 import ssdeep
-<<<<<<< HEAD
-=======
 import time
 from ghidra.program.model.listing import Instruction
 from ghidra.program.model.address import Address
 from ghidra.program.flatapi import FlatProgramAPI
 from ghidra.program.model.lang import OperandType
->>>>>>> master
-
-# Set FIRMAL_DIR in env for output file location
-if 'FIRMAL_DIR' not in os.environ:
-	print("ERROR: env FIRMAL_DIR not set. Set FIRMAL_DIR for output directory")
-	exit(-1)
-
-# Database save path from environ
-op_path = os.environ['FIRMAL_DIR']
-if op_path[-1] != "/":
-	op_path += "/"
-
-# Get conn to db and create table if it doesn't already exist
-hashdb = sqlite3.connect(op_path + "hash.db")
-cur = hashdb.cursor()
-res = cur.execute("SELECT name FROM sqlite_master WHERE name='hashdump'")
-if(res.fetchone() is None):
-    cur.execute("CREATE TABLE hashdump(size, progname, progpath, funcname, vaddr, fileoff, hash)")
 
 cp = currentProgram()
 ctx = {}
 ctx["ARCH"] = cp.getLanguage().toString().split("/")[0]
 ctx["BITS"] = cp.getLanguage().toString().split("/")[2]
-ctx["DBPATH"] = op_path+"hash.db"
-ctx["TIME"] = timestr
 ctx["FILEPATH"] = cp.getExecutablePath()
 
-<<<<<<< HEAD
-=======
 # Let script be run on headless mode with -noanalyse flag
->>>>>>> master
 # Set minimum number of analysis options
 opts = getCurrentAnalysisOptionsAndValues(cp)
 for x in opts:
@@ -112,7 +87,7 @@ def process_instruction(instruction):
             print("Unknown Architecture for process_instruction. Falling back to no masking")
 
     return code_bytes
-def process_function(func, cur):
+def process_function(func):
     # Perform adress masking
     # Get first instruction and iterate
     code_bytes = []
@@ -123,34 +98,13 @@ def process_function(func, cur):
         code_bytes.extend(process_instruction(instruction))
         instruction = instruction.getNext()
 
-    result = {}
-    result["name"] = func.getName()
-    entrypoint = func.getEntryPoint()
-    result["vaddr"] = "0x" + entrypoint.toString()
-    result["fileoffset"] = str(mem.getAddressSourceInfo(entrypoint).getFileOffset())
-# For size to work, ghidra analysis should be run
-# In case ghidra did not run analysis, the returned size is always 1
-    result["size"] = str(func.getBody().getNumAddresses())
-# Get function bytes out of a stupid java object
-    result["hash"] = ssdeep.hash(bytes(code_bytes))
-    row = (result['size'], cp.getName(), cp.getExecutablePath(), result['name'], result['vaddr'], result['fileoffset'], result['hash'])
-    return row
-
-data = []
-for func in funcs:
-    if(func.isThunk()):
-        continue
-    data.append(process_function(func, cur))
-    if(len(data) > 1000):
-        cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
-        data.clear()
+    hash = ssdeep.hash(bytes(code_bytes))
+    return (hash, code_bytes)
 
 
-cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
-data.clear()
-hashdb.commit()
-hashdb.close()
-<<<<<<< HEAD
-=======
-
->>>>>>> master
+funcaddr = askAddress("Function address","Enter Function address")
+fm = cp.getFunctionManager()
+func = fm.getFunctionAt(funcaddr)
+hash,code = process_function(func)
+print(hash)
+print(" ".join(["0x{:02x}".format(x) for x in code]))
