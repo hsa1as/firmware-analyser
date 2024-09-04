@@ -13,15 +13,6 @@
 import sqlite3
 import os
 import ssdeep
-<<<<<<< HEAD
-=======
-import time
-from ghidra.program.model.listing import Instruction
-from ghidra.program.model.address import Address
-from ghidra.program.flatapi import FlatProgramAPI
-from ghidra.program.model.lang import OperandType
->>>>>>> master
-
 # Set FIRMAL_DIR in env for output file location
 if 'FIRMAL_DIR' not in os.environ:
 	print("ERROR: env FIRMAL_DIR not set. Set FIRMAL_DIR for output directory")
@@ -44,13 +35,9 @@ ctx = {}
 ctx["ARCH"] = cp.getLanguage().toString().split("/")[0]
 ctx["BITS"] = cp.getLanguage().toString().split("/")[2]
 ctx["DBPATH"] = op_path+"hash.db"
-ctx["TIME"] = timestr
 ctx["FILEPATH"] = cp.getExecutablePath()
 
-<<<<<<< HEAD
-=======
 # Let script be run on headless mode with -noanalyse flag
->>>>>>> master
 # Set minimum number of analysis options
 opts = getCurrentAnalysisOptionsAndValues(cp)
 for x in opts:
@@ -150,7 +137,3 @@ cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
 data.clear()
 hashdb.commit()
 hashdb.close()
-<<<<<<< HEAD
-=======
-
->>>>>>> master
