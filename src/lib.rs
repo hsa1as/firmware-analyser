@@ -59,10 +59,10 @@ pub fn run(args: Args) -> Result<(), Box<dyn Error>> {
 
     match args.mode{
         AnalysisMode::Static =>{
-            static_analysis::run(fileinfo);
+            let _ = static_analysis::run(fileinfo);
         }
         AnalysisMode::Dynamic => {
-            dynamic_analysis::run(fileinfo);
+            let _ = dynamic_analysis::run(fileinfo);
         }
     }
     Ok(())
