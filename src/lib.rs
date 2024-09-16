@@ -14,6 +14,7 @@ mod dynamic_analysis;
     version,
     about = "Automated firmware re-hosting and analysis"
 )]
+
 pub struct Args {
     // Firmware filename
     #[arg(short, long)]
@@ -58,7 +59,7 @@ pub fn run(args: Args) -> Result<(), Box<dyn Error>> {
     fileinfo.init(&args.file_name);
 
     match args.mode{
-        AnalysisMode::Static =>{
+        AnalysisMode::Static => {
             static_analysis::run(fileinfo);
         }
         AnalysisMode::Dynamic => {

@@ -1,7 +1,6 @@
 use crate::FileInfo;
 use std::error::Error;
-use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
-use libafl::inputs::BytesInput;
+use unicorn_engine::unicorn_const::{Arch, Mode, Permission, SECOND_SCALE};
 
 mod hooks;
 
