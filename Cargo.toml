@@ -11,10 +11,12 @@ test=false
 bench=false
 
 [dependencies]
-unicorn-engine = "2.0.0"
+unicorn-engine = "2.1.0"
 libafl = { version = "*"}
+libafl_targets = {version = "*"}
 clap = { version = "4.0", features = ["derive"] }
 ratatui = "0.28.0"
+crossterm = "*"
 
 [build-dependencies]
 pkg-config = "0.3.16"

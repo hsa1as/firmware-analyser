@@ -1,13 +1,16 @@
 use crate::FileInfo;
-use std::error::Error;
-use unicorn_engine::RegisterARM;
+use crate::dynamic_analysis::emu::Emulator;
 use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
-use libafl::inputs::BytesInput;
 
-mod hooks;
-
+use std::error::Error;
+mod emu;
 pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
     let mut code = fileinfo.contents;
+    let mut ud: u64 = 0;
+    let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, ud);
+    emu.setup(&mut code);
+    emu.start_emu();
+/*    let mut code = fileinfo.contents;
 
     // Get reset vector
     // ARM32
@@ -40,7 +43,7 @@ pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
     )
     .expect("Error while running");
     println!("Stopped running @ PC = {:?}", emu.reg_read(RegisterARM::PC).unwrap());
-    println!("Finished running");
+    println!("Finished running");*/
     Ok(())
 
 }
