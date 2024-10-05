@@ -15,6 +15,7 @@ import os
 import ssdeep
 import pyhidra
 import sys
+import tlsh
 # Get Jpype to ghidra
 pyhidra.start()
 import ghidra
@@ -33,7 +34,7 @@ if op_path[-1] != "/":
 	op_path += "/"
 
 # Get conn to db and create table if it doesn't already exist
-hashdb = sqlite3.connect(op_path + "hash.db")
+hashdb = sqlite3.connect(op_path + "tslh_hash.db")
 cur = hashdb.cursor()
 res = cur.execute("SELECT name FROM sqlite_master WHERE name='hashdump'")
 if(res.fetchone() is None):
@@ -41,12 +42,12 @@ if(res.fetchone() is None):
 files = sys.argv[1:]
 for filename in files:
 # Open program
-    with pyhidra.open_program(filename,project_location=None,project_name=None
+    with pyhidra.open_program(filename,project_location=None,project_name=None,
                               analyze=False,
-                              language="ARM:LE:32:Cortex") as flat_api:
+                              language=None) as flat_api: # ARM:LE:32:Cortex
         cp = flat_api.getCurrentProgram()
         ctx = {}
-        ctx["ARCH"] = cp.getLanguage().toString().split("/")[0]
+        ctx["ARCH"] = None #cp.getLanguage().toString().split("/")[0]
         ctx["BITS"] = cp.getLanguage().toString().split("/")[2]
         ctx["DBPATH"] = op_path+"hash.db"
         ctx["FILEPATH"] = cp.getExecutablePath()
@@ -99,7 +100,7 @@ for filename in files:
             # Architecture specific code follows.
             # Register and memory masking is implemented for ARM only
             match ctx["ARCH"]:
-                case "ARM":
+                case "ARM" | None:
                     # Deconstructing arm is easier than other archs i hope
 
                     # 4 byte instruction:
@@ -133,7 +134,7 @@ for filename in files:
 # In case ghidra did not run analysis, the returned size is always 1
             result["size"] = str(func.getBody().getNumAddresses())
 # Get function bytes out of a stupid java object
-            result["hash"] = ssdeep.hash(bytes(code_bytes))
+            result["hash"] = tlsh.hash(bytes(code_bytes))
             row = (result['size'], cp.getName(), cp.getExecutablePath(), result['name'], result['vaddr'], result['fileoffset'], result['hash'])
             return row
 
