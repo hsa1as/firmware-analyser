@@ -99,19 +99,18 @@ for filename in files:
             code_bytes = bytes(map(lambda b: b &0xff, instruction.getBytes()))
             # Architecture specific code follows.
             # Register and memory masking is implemented for ARM only
-            match ctx["ARCH"]:
-                case "ARM" | None:
-                    # Deconstructing arm is easier than other archs i hope
+            if(ctx["ARCH"] == "ARM" or ctx["ARCH"] == None):
+                # Deconstructing arm is easier than other archs i hope
 
-                    # 4 byte instruction:
-                    if(len(code_bytes) == 4):
-                        code_bytes = mask_ARM(instruction)
+                # 4 byte instruction:
+                if(len(code_bytes) == 4):
+                    code_bytes = mask_ARM(instruction)
 
-                    # 2 Byte instruction (thumb)
-                    if(len(code_bytes) == 2):
-                        code_bytes = mask_ARM_THUMB(instruction)
-                case _:
-                    print("Unknown Architecture for process_instruction. Falling back to no masking")
+                # 2 Byte instruction (thumb)
+                if(len(code_bytes) == 2):
+                    code_bytes = mask_ARM_THUMB(instruction)
+            else:
+                print("Unknown Architecture for process_instruction. Falling back to no masking")
 
             return code_bytes
         def process_function(func, cur):
