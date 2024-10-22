@@ -1,12 +1,9 @@
-use crate::FileInfo;
-use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
-
-use std::error::Error;
-pub mod emu;
-use emu::input::{InputWrapper, InputIterator, CanLoadData};
+use crate::{FileInfo, dynamic_analysis::emu::{input::{CanLoadData,InputIterator}, Emulator}};
 use std::{
     env,
     path::PathBuf,
+    time::Duration,
+    error::Error
 };
 use unicorn_engine::Unicorn;
 use libafl_targets::{EDGES_MAP_PTR, EDGES_MAP_SIZE_IN_USE};
@@ -19,40 +16,18 @@ use libafl_bolts::{
     tuples::tuple_list,
 };
 
-pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
+pub fn start_fuzz(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
 {
      // Create harness
     let mut harness = |input: &BytesInput|{
         let ud = InputWrapper::new();
         let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, ud);
-        emu.setup(&mut fileinfo.contents);
         let ud = emu.get_mut_data();
         ud.reset().expect("Error while resetting Input object");
         ud.load_bytes(input);
-        let emu_result = emu.start_emu();
-        let result = match emu_result {
-            Ok(()) => ExitKind::Ok,
-            Err(uc_error) => ExitKind::Crash,
-        };
-        return result;
+        emu.start_emu();
+        ExitKind::Ok
     };
-/*
-    let i1 = BytesInput::new(vec![0, 0x1, 0x2, 0x3, 0x4, 0x5]);
-    let i2 = BytesInput::new(vec![0, 0x4, 0x7, 0x13, 0xa, 0xf5]);
-    let mut r = harness(&i1);
-    let mut r2 = match r {
-        ExitKind::Ok => "Okay",
-        _ => "crashed",
-    };
-    println!("{r2}");
-    println!("All ok");
-    r = harness(&i2);
-    r2 = match r{
-            ExitKind::Ok => "Okay",
-        _ => "crashed",
-    };
-    println!("{r2}");*/
-
     let monitor = MultiMonitor::new(|s| println!("{s}"));
     let mut mgr = SimpleEventManager::new(monitor);
     let edges_observer = unsafe {
@@ -67,7 +42,7 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
         TimeFeedback::new(&time_observer)
     );
 
-    let mut objective = feedback_or_fast!(CrashFeedback::new());
+    let mut objective = feedback_or_fast!(CrashFeedback::new(), TimeoutFeedback::new());
 
     let mut state = StdState::new(
         StdRand::with_seed(current_nanos()),
@@ -107,8 +82,3 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
         .expect("Error in the fuzzing loop");
     Ok(())
 }
-pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
-    start_fuzz(fileinfo).expect("Huh what");
-    Ok(())
-}
-

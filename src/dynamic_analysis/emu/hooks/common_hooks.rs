@@ -18,11 +18,11 @@ use crossterm::{
 static mut PREV: u64 = 0;
 
 pub fn block_hook<T>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
-    println!("Block hook : Address = {loc:#08x}, Size = {sz}");
-
     unsafe{
         let hash = ( loc ^ PREV ) & ( EDGES_MAP_SIZE_IN_USE as u64 - 1 );
-        EDGES_MAP[hash as usize] += 1;
+        let mut cur = EDGES_MAP[hash as usize];
+        cur = cur.overflowing_add(1).0;
+        EDGES_MAP[hash as usize] = cur;
         PREV = loc >> 1;
     }
 }
@@ -98,7 +98,8 @@ pub fn debug_output<T>(uc: &mut Unicorn<'_, T>){
     let arch = uc.ctl_get_arch().unwrap();
     match arch{
         Arch::ARM => {
-            dump_arm_debug_info(uc);
+            //dump_arm_debug_info(uc);
+            println!("Placeholder for ratatui");
         },
         _ => {
             unimplemented!();

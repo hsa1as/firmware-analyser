@@ -14,6 +14,7 @@ bench=false
 unicorn-engine = "2.1.0"
 libafl = { version = "*"}
 libafl_targets = {version = "*"}
+libafl_bolts = {version = "*"}
 clap = { version = "4.0", features = ["derive"] }
 ratatui = "0.28.0"
 crossterm = "*"
