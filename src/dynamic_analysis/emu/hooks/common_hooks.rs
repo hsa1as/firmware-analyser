@@ -1,6 +1,5 @@
 // TODO: is CPU context correctly saved when emulation stopped inside a hook?
 use std::{io, panic};
-use libafl_targets::{EDGES_MAP, EDGES_MAP_SIZE_IN_USE};
 use unicorn_engine::unicorn_const::MemType;
 use unicorn_engine::{Arch, RegisterARM, Unicorn};
 use ratatui::{
@@ -15,14 +14,18 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use libafl_targets::EDGES_MAP_SIZE_IN_USE;
 static mut PREV: u64 = 0;
 
-pub fn block_hook<T>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
+pub trait CanUpdateMap{
+    unsafe fn update_map(&mut self, _: u64);
+}
+
+pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     unsafe{
+        let mut fud = uc.get_data_mut();
         let hash = ( loc ^ PREV ) & ( EDGES_MAP_SIZE_IN_USE as u64 - 1 );
-        let mut cur = EDGES_MAP[hash as usize];
-        cur = cur.overflowing_add(1).0;
-        EDGES_MAP[hash as usize] = cur;
+        fud.update_map(hash);
         PREV = loc >> 1;
     }
 }

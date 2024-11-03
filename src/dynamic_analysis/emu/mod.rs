@@ -2,8 +2,9 @@ use input::InputIterator;
 pub use unicorn_engine::{ArmCpuModel, RegisterARM, Context};
 pub use unicorn_engine::unicorn_const::{uc_error, Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
 use std::error::Error;
-mod hooks;
+pub mod hooks;
 pub mod input;
+pub use hooks::common_hooks::CanUpdateMap;
 pub struct Emulator<'a, T: InputIterator>{
     uc: unicorn_engine::Unicorn<'a, T>,
     arch: Arch,
@@ -14,7 +15,7 @@ pub struct Emulator<'a, T: InputIterator>{
 }
 
 impl<'a, T> Emulator<'a, T> where
-    T: InputIterator
+    T: InputIterator + CanUpdateMap,
 {
     pub fn new(arch: Arch, mode: Mode, ud: T) -> Emulator<'a, T>{
         let uc_n = unicorn_engine::Unicorn::new_with_data(arch, mode, ud).expect("Unable to create uc emulator");
