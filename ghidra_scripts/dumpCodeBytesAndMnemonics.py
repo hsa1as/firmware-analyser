@@ -40,7 +40,7 @@ def process_function(func):
         code_bytes.extend(process_instruction(instruction))
         assembly += "\n" + instruction.toString()
         instruction = instruction.getNext()
-    result = {"program": cp.getName(),"addr": func.getBody().getMinAddress().toString(), "mnemonic": assembly, "code_bytes": "".join(["{:02x}".format(x) for x in code_bytes])}
+    result = {"program": cp.getName(), "func_name": func.getName(), "addr": func.getBody().getMinAddress().toString(), "mnemonic": assembly, "code_bytes": "".join(["{:02x}".format(x) for x in code_bytes])}
     return result
 f = open("/home/hsaias/LLMExp/output.json","r+")
 data = f.read()

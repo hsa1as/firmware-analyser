@@ -85,8 +85,6 @@ impl<'a, T> Emulator<'a, T> where
 
     pub fn start_emu(&mut self) -> Result<(), uc_error>{
         self.uc.emu_start(self.entry_point, 0x1FFFFFFF, self.timeout, self.count as usize)
-            .expect("What happened");
-        Ok(())
     }
 
     pub fn get_mut_data(&mut self) -> &mut T{

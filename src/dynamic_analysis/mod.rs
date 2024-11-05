@@ -143,6 +143,7 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
     fuzzer
         .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
         .expect("Error in the fuzzing loop");
+    println!("It stopped?");
     Ok(())
 }
 pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
