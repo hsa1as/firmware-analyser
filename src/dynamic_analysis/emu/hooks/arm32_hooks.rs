@@ -1,7 +1,8 @@
 pub use unicorn_engine::unicorn_const::MemType;
 use crate::dynamic_analysis::InputIterator;
 
-pub fn ARM_CORTEX_M3_PERIPHERAL_HOOK<'a, T>(uc: &'a mut unicorn_engine::Unicorn<'_, T>,
+#[allow(non_snake_case, unused_variables)]
+pub fn ARM_CORTEX_M3_PERIPHERAL_HOOK<T>(uc: &mut unicorn_engine::Unicorn<'_, T>,
                            acc_type: MemType, loc: u64, sz: usize, val: i64) -> bool where
 T: InputIterator
 {

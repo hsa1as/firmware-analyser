@@ -35,14 +35,12 @@ impl InputIterator for InputWrapper{
         }
         let mut a: [u8; 4] = [0,0,0,0];
         let mut i: usize = 0;
-        let mut count: u64 = 0;
-        while (self.idx < self.bytes.len() && i < 4) {
+        while self.idx < self.bytes.len() && i < 4 {
             a[i] = self.bytes[self.idx];
             self.idx += 1;
             i += 1;
-            count += 1;
         }
-        return a;
+        a
     }
 
     fn reset(&mut self) -> Result<(), Box<dyn Error>>{

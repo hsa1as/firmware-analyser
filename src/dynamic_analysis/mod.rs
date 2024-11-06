@@ -1,28 +1,46 @@
 use crate::FileInfo;
-use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
 
+// Standard imports
 use std::error::Error;
-pub mod emu;
-use emu::input::{InputWrapper, InputIterator, CanLoadData};
-use emu::hooks::common_hooks::CanUpdateMap;
-use std::{
-    env,
-    path::PathBuf,
-};
-use unicorn_engine::Unicorn;
-use libafl_targets::{EDGES_MAP_PTR, EDGES_MAP_SIZE_IN_USE};
+use std::path::PathBuf;
+
+// Unicorn imports
+use unicorn_engine::unicorn_const::{Arch,  Mode};
+
+// LibAFL imports
+use libafl_targets::EDGES_MAP_SIZE_IN_USE;
+#[allow(unused_imports)]
 use libafl::{
-    corpus::{InMemoryCorpus, OnDiskCorpus}, events::SimpleEventManager, executors::{inprocess_fork::InProcessForkExecutor, ExitKind}, feedback_or, feedback_or_fast, feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback}, fuzzer::{Fuzzer, StdFuzzer}, generators::RandBytesGenerator, inputs::BytesInput, monitors::{MultiMonitor, tui::TuiMonitor}, mutators::scheduled::{havoc_mutations, StdScheduledMutator}, observers::{ConstMapObserver, HitcountsMapObserver, TimeObserver}, prelude::CanTrack, schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler}, stages::mutational::StdMutationalStage, state::StdState
+    corpus::{InMemoryCorpus, OnDiskCorpus},
+    events::SimpleEventManager, executors::{inprocess_fork::InProcessForkExecutor, ExitKind},
+    feedback_or,
+    feedback_or_fast,
+    feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback, TimeoutFeedback},
+    fuzzer::{Fuzzer, StdFuzzer},
+    generators::RandBytesGenerator,
+    inputs::BytesInput,
+    monitors::{MultiMonitor, tui::TuiMonitor},
+    mutators::scheduled::{havoc_mutations, StdScheduledMutator},
+    observers::{ConstMapObserver, HitcountsMapObserver, TimeObserver},
+    prelude::CanTrack,
+    schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
+    stages::mutational::StdMutationalStage,
+    state::StdState
 };
 use libafl_bolts::{
     current_nanos,
     rands::StdRand,
     tuples::tuple_list,
-    shmem::{unix_shmem, ShMem, ShMemProvider},
+    shmem::{unix_shmem, ShMemProvider},
     AsSliceMut,
 };
 
+// Emulator struct
+pub mod emu;
+use emu::input::{InputWrapper, InputIterator, CanLoadData};
+use emu::hooks::common_hooks::CanUpdateMap;
 
+#[allow(dead_code)]
 pub struct FuzzUserData<CM>{
     input_object: InputWrapper,
     cov_map:  CM,
@@ -65,6 +83,7 @@ impl<CM> FuzzUserData<CM>{
     }
 }
 
+#[allow(non_snake_case, unused_variables, unused_mut)]
 pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
 {
     // Shmem provider
@@ -83,11 +102,10 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
         ud.reset().expect("Error while resetting Input object");
         ud.load_bytes(input);
         let emu_result = emu.start_emu();
-        let result = match emu_result {
+        match emu_result {
             Ok(()) => ExitKind::Ok,
             Err(uc_error) => ExitKind::Crash,
-        };
-        return result;
+        }
     };
     let monitor = TuiMonitor::builder().title(String::from("KMN")).build();
     let mut mgr = SimpleEventManager::new(monitor);

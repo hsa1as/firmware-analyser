@@ -1,12 +1,13 @@
-// TODO: is CPU context correctly saved when emulation stopped inside a hook?
 use std::{io, panic};
+
 use unicorn_engine::unicorn_const::MemType;
 use unicorn_engine::{Arch, RegisterARM, Unicorn};
+
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem},
     Terminal,
 };
 use crossterm::{
@@ -14,13 +15,16 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+
 use libafl_targets::EDGES_MAP_SIZE_IN_USE;
-static mut PREV: u64 = 0;
+
 
 pub trait CanUpdateMap{
     unsafe fn update_map(&mut self, _: u64);
 }
 
+static mut PREV: u64 = 0;
+#[allow(unused)]
 pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     unsafe{
         let mut fud = uc.get_data_mut();
@@ -30,6 +34,7 @@ pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     }
 }
 
+#[allow(unused)]
 pub fn code_hook<T>(uc: &mut Unicorn<'_, T>, loc:u64, sz: u32){
     println!("Code hook : Address = {loc:#08x}, Size = {sz}");
 }
@@ -39,6 +44,7 @@ pub fn insn_invalid_hook<T>(uc: &mut Unicorn<'_, T>) -> bool{
     false
 }
 
+#[allow(unused)]
 pub fn mem_hook<T>(uc: &mut Unicorn<'_, T>, mem_type: MemType, address: u64, size: usize, value: i64) -> bool{
     match mem_type{
         MemType::WRITE_PROT => {
@@ -68,6 +74,7 @@ pub fn mem_hook<T>(uc: &mut Unicorn<'_, T>, mem_type: MemType, address: u64, siz
     }
 }
 
+#[allow(unused)]
 fn dump_arm_registers<T>(uc: &mut Unicorn<'_, T>){
     let registers = [
         (RegisterARM::R0, "R0"),
@@ -110,6 +117,7 @@ pub fn debug_output<T>(uc: &mut Unicorn<'_, T>){
     }
 }
 
+#[allow(unused)]
 fn dump_arm_debug_info<T>(uc: &mut Unicorn<'_, T>) -> Result<(), io::Error> {
     // Setup terminal
     enable_raw_mode()?;
@@ -120,6 +128,7 @@ fn dump_arm_debug_info<T>(uc: &mut Unicorn<'_, T>) -> Result<(), io::Error> {
 
     // Main loop
     loop {
+        #[allow(deprecated)]
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)

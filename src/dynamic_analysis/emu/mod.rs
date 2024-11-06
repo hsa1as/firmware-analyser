@@ -1,10 +1,15 @@
-use input::InputIterator;
-pub use unicorn_engine::{ArmCpuModel, RegisterARM, Context};
-pub use unicorn_engine::unicorn_const::{uc_error, Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
-use std::error::Error;
-pub mod hooks;
+// Input type
 pub mod input;
+use input::InputIterator;
+
+// Unicorn imports
+use unicorn_engine::{ArmCpuModel, RegisterARM, Context};
+use unicorn_engine::unicorn_const::{uc_error, Arch, HookType, Mode, Permission};
+
+pub mod hooks;
 pub use hooks::common_hooks::CanUpdateMap;
+
+#[allow(dead_code)]
 pub struct Emulator<'a, T: InputIterator>{
     uc: unicorn_engine::Unicorn<'a, T>,
     arch: Arch,
