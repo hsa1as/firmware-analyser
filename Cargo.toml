@@ -11,7 +11,7 @@ test=false
 bench=false
 
 [dependencies]
-unicorn-engine = "2.1.0"
+unicorn-engine = "2.1.1"
 libafl = { version = "*"}
 libafl_targets = {version = "*"}
 libafl_bolts = {version = "*"}

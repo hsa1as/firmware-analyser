@@ -434,7 +434,7 @@ name = "firmware-analyser"
 version = "0.1.0"
 dependencies = [
  "clap",
- "crossterm 0.27.0",
+ "crossterm 0.28.1",
  "libafl",
  "libafl_bolts",
  "libafl_targets",
@@ -1343,9 +1343,9 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "unicorn-engine"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a8e0c066bfbe09a7f005ce8cd727bcff08fe1fb10bd14656e2627b5b4c00f80"
+checksum = "187dc7f483d41e758e1f7e41d9248da162d1ca160f8088c07172c30227b8af35"
 dependencies = [
  "bitflags",
  "cc",

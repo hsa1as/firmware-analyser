@@ -3,11 +3,18 @@ pub mod input;
 use input::InputIterator;
 
 // Unicorn imports
-use unicorn_engine::{ArmCpuModel, RegisterARM, Context};
-use unicorn_engine::unicorn_const::{uc_error, Arch, HookType, Mode, Permission};
+use unicorn_engine::{ArmCpuModel, Context, MemType, RegisterARM};
+use unicorn_engine::unicorn_const::{uc_error, Arch, HookType, Mode, Permission, SECOND_SCALE};
 
+// Hooks
 pub mod hooks;
 pub use hooks::common_hooks::CanUpdateMap;
+pub use hooks::interrupt::InterruptState;
+
+// Std
+use std::cell::RefCell;
+use std::rc::Rc;
+
 
 #[allow(dead_code)]
 pub struct Emulator<'a, T: InputIterator>{
@@ -76,20 +83,51 @@ impl<'a, T> Emulator<'a, T> where
           //  .expect("Unable to add code hook");
         self.uc.add_insn_invalid_hook(hooks::common_hooks::insn_invalid_hook)
             .expect("Unable to add invalid instruction hook");
-        self.uc.add_mem_hook(HookType::MEM_INVALID, 0x20000000, 0xFFFFFFFF, hooks::common_hooks::mem_hook)
-            .expect("Unable to add invalid mem access hook");
         match self.arch{
             Arch::ARM => {
                 // TOOD: make start_address tunable as memory maps change
                 self.uc.add_mem_hook(HookType::MEM_ALL, 0x40000000, 0x60000000, hooks::arm32_hooks::ARM_CORTEX_M3_PERIPHERAL_HOOK)
                     .expect("Unable to add peripheral hook for ARM");
+                // Hook all invalid accesses till 0xF0000000
+                // after 0xF0000000, EXC_RETURN is handled separately
+                self.uc.add_mem_hook(HookType::MEM_INVALID, 0x20000000, 0xEFFFFFFF, hooks::common_hooks::mem_hook)
+                    .expect("Unable to add invalid mem access hook");
+                self.uc.add_mem_hook(HookType::MEM_READ_PROT | HookType::MEM_WRITE_PROT, 0xF0000000, 0xFFFFFFFF, hooks::common_hooks::mem_hook)
+                    .expect("Unable to add invalid r/w hook to 0xF0000000+");
+
+                // Setup an interrupt state to be moved into the two exception callbacks
+                let mut interrupt_state = InterruptState::new();
+                let interrupt_state_ref_return = Rc::new(RefCell::new(interrupt_state));
+                let interrupt_state_ref_enter = Rc::clone(&interrupt_state_ref_return);
+
+                // Setup EXC_RETURN hook
+                let mut exc_ret = move |uc: &mut unicorn_engine::Unicorn<'_, T>, m: MemType, addr: u64, sz: usize, val: i64| -> bool {
+                    // PC = EXC_RETURN
+                    let exc_return = addr;
+
+                    // Check exc_return value
+                    // Only bottom four bits can change
+                    if exc_return & 0xFFFFFFF0 != 0xFFFFFFF0 {
+                       // What just happened?
+                        return false;
+                    }
+                    //Get mutable borrow to interrupt state
+                    let mut intr_state = (*interrupt_state_ref_return).borrow_mut();
+                    match hooks::interrupt::handle_exception_return(uc, &mut intr_state, exc_return) {
+                        Ok(_v) => true,
+                        Err(_e) => false
+                    }
+                };
+                self.uc.add_mem_hook(HookType::MEM_FETCH_PROT, 0xF0000000, 0xFFFFFFFF, exc_ret)
+                    .expect("Unable to add exception return hook");
+
             },
             _ => unimplemented!()
         }
     }
 
     pub fn start_emu(&mut self) -> Result<(), uc_error>{
-        self.uc.emu_start(self.entry_point, 0x1FFFFFFF, self.timeout, self.count as usize)
+        self.uc.emu_start(self.entry_point, 0x1FFFFFFF, self.timeout * SECOND_SCALE, self.count as usize)
     }
 
     pub fn get_mut_data(&mut self) -> &mut T{

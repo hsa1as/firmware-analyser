@@ -84,7 +84,13 @@ impl<CM> FuzzUserData<CM>{
 }
 
 #[allow(non_snake_case, unused_variables, unused_mut)]
-pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
+pub fn emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
+    println!("Not implemented");
+    Ok(())
+}
+
+#[allow(non_snake_case, unused_variables, unused_mut)]
+pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
 {
     // Shmem provider
     let mut shmem_provider = unix_shmem::UnixShMemProvider::new().unwrap();
@@ -107,7 +113,7 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
             Err(uc_error) => ExitKind::Crash,
         }
     };
-    let monitor = TuiMonitor::builder().title(String::from("KMN")).build();
+    let monitor = TuiMonitor::builder().title(String::from("Fuzzer")).build();
     let mut mgr = SimpleEventManager::new(monitor);
     let edges_observer = unsafe {
         HitcountsMapObserver::new(ConstMapObserver::<_, EDGES_MAP_SIZE_IN_USE>::from_mut_ptr(
@@ -125,7 +131,7 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
 
     let mut state = StdState::new(
         StdRand::with_seed(current_nanos()),
-        InMemoryCorpus::new(),
+        OnDiskCorpus::new(PathBuf::from("./corpus")).unwrap(),
         OnDiskCorpus::new(PathBuf::from("./crashes")).unwrap(),
         &mut feedback,
         &mut objective,
@@ -164,8 +170,14 @@ pub fn start_fuzz(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
     println!("It stopped?");
     Ok(())
 }
-pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
-    start_fuzz(fileinfo).expect("Huh what");
+
+
+pub fn run(fileinfo: FileInfo, fuzz: bool) -> Result<(), Box<dyn Error>> {
+    if fuzz {
+        start_fuzz_singlecore(fileinfo).expect("Fuzzing failed");
+    } else{
+        emulate(fileinfo).expect("Emulation failed");
+    }
     Ok(())
 }
 

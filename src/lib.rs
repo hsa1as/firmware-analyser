@@ -31,6 +31,10 @@ enum AnalysisMode{
 
     // Dynamic analysis
     Dynamic,
+
+    // Pure emulation
+    Emulate,
+
 }
 
 #[derive(Default, Debug)]
@@ -62,7 +66,10 @@ pub fn run(args: Args) -> Result<(), Box<dyn Error>> {
             let _ = static_analysis::run(fileinfo);
         }
         AnalysisMode::Dynamic => {
-            let _ = dynamic_analysis::run(fileinfo);
+            let _ = dynamic_analysis::run(fileinfo, true);
+        }
+        AnalysisMode::Emulate => {
+            let _ = dynamic_analysis::run(fileinfo, false);
         }
     }
     Ok(())
