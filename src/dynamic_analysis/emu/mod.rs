@@ -102,7 +102,13 @@ impl<'a, T> Emulator<'a, T> where
 
                 // Setup EXC_RETURN hook, use intr_hook, interrupt number 8 as documented in unicorn
                 // FAQ
-                let mut exc_ret = move |uc: &mut unicorn_engine::Unicorn<'_, T>, intr_num: u32| {
+                let mut sw_intr_handle = move |uc: &mut unicorn_engine::Unicorn<'_, T>, intr_num: u32| {
+                    if(intr_num != 8){
+                        // This is a normal software interrupt, do not do an exc_return
+                        return;
+                    }
+
+                    // Do exc_return
                     // PC = EXC_RETURN
                     let exc_return = uc.reg_read(RegisterARM::PC).unwrap() as u32;
 
@@ -119,7 +125,7 @@ impl<'a, T> Emulator<'a, T> where
                         Err(_e) => panic!("BUG!")
                     };
                 };
-                self.uc.add_intr_hook(exc_ret)
+                self.uc.add_intr_hook(sw_intr_handle)
                     .expect("Unable to add interrupt hook to handle EXC_RETURN for ARM");
 
             },
