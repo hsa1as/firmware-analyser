@@ -100,26 +100,27 @@ impl<'a, T> Emulator<'a, T> where
                 let interrupt_state_ref_return = Rc::new(RefCell::new(interrupt_state));
                 let interrupt_state_ref_enter = Rc::clone(&interrupt_state_ref_return);
 
-                // Setup EXC_RETURN hook
-                let mut exc_ret = move |uc: &mut unicorn_engine::Unicorn<'_, T>, m: MemType, addr: u64, sz: usize, val: i64| -> bool {
+                // Setup EXC_RETURN hook, use intr_hook, interrupt number 8 as documented in unicorn
+                // FAQ
+                let mut exc_ret = move |uc: &mut unicorn_engine::Unicorn<'_, T>, intr_num: u32| {
                     // PC = EXC_RETURN
-                    let exc_return = addr;
+                    let exc_return = uc.reg_read(RegisterARM::PC).unwrap() as u32;
 
                     // Check exc_return value
                     // Only bottom four bits can change
                     if exc_return & 0xFFFFFFF0 != 0xFFFFFFF0 {
                        // What just happened?
-                        return false;
+                        panic!("EXC_RETURN value invalid");
                     }
                     //Get mutable borrow to interrupt state
                     let mut intr_state = (*interrupt_state_ref_return).borrow_mut();
-                    match hooks::interrupt::handle_exception_return(uc, &mut intr_state, exc_return) {
-                        Ok(_v) => true,
-                        Err(_e) => false
-                    }
+                    match hooks::interrupt::handle_exception_return(uc, &mut intr_state, exc_return as u64) {
+                        Ok(_v) => (),
+                        Err(_e) => panic!("BUG!")
+                    };
                 };
-                self.uc.add_mem_hook(HookType::MEM_FETCH_PROT, 0xF0000000, 0xFFFFFFFF, exc_ret)
-                    .expect("Unable to add exception return hook");
+                self.uc.add_intr_hook(exc_ret)
+                    .expect("Unable to add interrupt hook to handle EXC_RETURN for ARM");
 
             },
             _ => unimplemented!()

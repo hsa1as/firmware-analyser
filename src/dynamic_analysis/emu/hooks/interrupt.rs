@@ -85,6 +85,10 @@ pub fn handle_interrupt<T>(uc: &mut Unicorn<'_,T>, state: &mut InterruptState) -
     Ok(())
 }
 
+
+// fetch_prot hook is not required see : https://github.com/unicorn-engine/unicorn/blob/dev/docs/FAQ.md#how-to-emulate-interrupts-or-ticks-with-unicorn
+// Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
+// Example in unit tests
 pub fn handle_exception_return<T>(
     uc: &mut Unicorn<'_, T>,
     state: &mut InterruptState,

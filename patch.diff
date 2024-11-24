@@ -1,0 +1,731 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 5e13679..db07491 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -124,10 +124,27 @@ dependencies = [
+ ]
+ 
+ [[package]]
+-name = "bitflags"
+-version = "1.3.2"
++name = "bindgen"
++version = "0.69.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
++checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
++dependencies = [
++ "bitflags",
++ "cexpr",
++ "clang-sys",
++ "itertools 0.12.1",
++ "lazy_static",
++ "lazycell",
++ "log",
++ "prettyplease",
++ "proc-macro2",
++ "quote",
++ "regex",
++ "rustc-hash",
++ "shlex",
++ "syn 2.0.77",
++ "which",
++]
+ 
+ [[package]]
+ name = "bitflags"
+@@ -175,6 +192,19 @@ name = "cc"
+ version = "1.1.10"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e9e8aabfac534be767c909e0690571677d49f41bd8465ae876fe043d52ba5292"
++dependencies = [
++ "jobserver",
++ "libc",
++]
++
++[[package]]
++name = "cexpr"
++version = "0.6.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
++dependencies = [
++ "nom",
++]
+ 
+ [[package]]
+ name = "cfg-if"
+@@ -188,6 +218,17 @@ version = "0.2.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+ 
++[[package]]
++name = "clang-sys"
++version = "1.8.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
++dependencies = [
++ "glob",
++ "libc",
++ "libloading",
++]
++
+ [[package]]
+ name = "clap"
+ version = "4.5.15"
+@@ -219,7 +260,7 @@ dependencies = [
+  "heck",
+  "proc-macro2",
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -311,7 +352,7 @@ version = "0.27.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+  "crossterm_winapi",
+  "libc",
+  "mio 0.8.11",
+@@ -327,7 +368,7 @@ version = "0.28.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+  "crossterm_winapi",
+  "mio 1.0.2",
+  "parking_lot",
+@@ -353,7 +394,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+ dependencies = [
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -394,6 +435,7 @@ version = "0.1.0"
+ dependencies = [
+  "clap",
+  "libafl",
++ "libafl_targets",
+  "pkg-config",
+  "ratatui 0.28.0",
+  "unicorn-engine",
+@@ -416,6 +458,12 @@ version = "0.29.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
+ 
++[[package]]
++name = "glob"
++version = "0.3.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
++
+ [[package]]
+ name = "hashbrown"
+ version = "0.14.5"
+@@ -439,6 +487,15 @@ version = "0.3.9"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
+ 
++[[package]]
++name = "home"
++version = "0.5.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
++dependencies = [
++ "windows-sys 0.52.0",
++]
++
+ [[package]]
+ name = "hostname"
+ version = "0.4.0"
+@@ -457,7 +514,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "b23a0c8dfe501baac4adf6ebbfa6eddf8f0c07f56b058cc1288017e32397846c"
+ dependencies = [
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -490,6 +547,27 @@ version = "1.0.11"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
+ 
++[[package]]
++name = "jobserver"
++version = "0.1.32"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "48d1dbcbbeb6a7fec7e059840aa538bd62aaccf972c7346c4d9d2059312853d0"
++dependencies = [
++ "libc",
++]
++
++[[package]]
++name = "lazy_static"
++version = "1.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
++
++[[package]]
++name = "lazycell"
++version = "1.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
++
+ [[package]]
+ name = "libafl"
+ version = "0.13.2"
+@@ -566,7 +644,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "fb28be024e17736dc77eca670c85e0bca03dd7a142b5908076e6b394c9942566"
+ dependencies = [
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
++]
++
++[[package]]
++name = "libafl_targets"
++version = "0.13.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b29b5e4c6dc4be19b04602d0e420678569e59c1701f4562cf2f2d0a1df9f03b4"
++dependencies = [
++ "bindgen",
++ "cc",
++ "hashbrown",
++ "libafl",
++ "libafl_bolts",
++ "libc",
++ "log",
++ "once_cell",
++ "rangemap",
++ "rustversion",
++ "serde",
+ ]
+ 
+ [[package]]
+@@ -575,6 +672,16 @@ version = "0.2.155"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
+ 
++[[package]]
++name = "libloading"
++version = "0.8.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
++dependencies = [
++ "cfg-if",
++ "windows-targets 0.52.6",
++]
++
+ [[package]]
+ name = "libm"
+ version = "0.2.8"
+@@ -646,6 +753,12 @@ dependencies = [
+  "autocfg",
+ ]
+ 
++[[package]]
++name = "minimal-lexical"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
++
+ [[package]]
+ name = "miniz_oxide"
+ version = "0.7.4"
+@@ -686,13 +799,23 @@ version = "0.29.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+  "cfg-if",
+  "cfg_aliases",
+  "libc",
+  "memoffset",
+ ]
+ 
++[[package]]
++name = "nom"
++version = "7.1.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
++dependencies = [
++ "memchr",
++ "minimal-lexical",
++]
++
+ [[package]]
+ name = "num-traits"
+ version = "0.2.19"
+@@ -719,7 +842,7 @@ checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -783,6 +906,16 @@ dependencies = [
+  "serde",
+ ]
+ 
++[[package]]
++name = "prettyplease"
++version = "0.2.22"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "479cf940fbbb3426c32c5d5176f62ad57549a0bb84773423ba8be9d089f5faba"
++dependencies = [
++ "proc-macro2",
++ "syn 2.0.77",
++]
++
+ [[package]]
+ name = "proc-macro2"
+ version = "1.0.86"
+@@ -807,13 +940,19 @@ version = "0.6.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+ 
++[[package]]
++name = "rangemap"
++version = "1.5.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f60fcc7d6849342eff22c4350c8b9a989ee8ceabc4b481253e8946b9fe83d684"
++
+ [[package]]
+ name = "ratatui"
+ version = "0.26.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f44c9e68fd46eda15c646fbb85e1040b657a58cdc8c98db1d97a55930d991eef"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+  "cassowary",
+  "compact_str 0.7.1",
+  "crossterm 0.27.0",
+@@ -833,7 +972,7 @@ version = "0.28.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "5ba6a365afbe5615999275bea2446b970b10a41102500e27ce7678d50d978303"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+  "cassowary",
+  "compact_str 0.8.0",
+  "crossterm 0.28.1",
+@@ -854,7 +993,7 @@ version = "0.5.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "2a908a6e00f1fdd0dfd9c0eb08ce85126f6d8bbda50017e74bc4a4b7d4a926a4"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+ ]
+ 
+ [[package]]
+@@ -892,13 +1031,19 @@ version = "0.1.24"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
+ 
++[[package]]
++name = "rustc-hash"
++version = "1.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
++
+ [[package]]
+ name = "rustix"
+ version = "0.38.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "70dc5ec042f7a43c4a73241207cecc9873a06d45debb38b329f8541d85c2730f"
+ dependencies = [
+- "bitflags 2.6.0",
++ "bitflags",
+  "errno",
+  "libc",
+  "linux-raw-sys",
+@@ -955,7 +1100,7 @@ checksum = "fabfb6138d2383ea8208cf98ccf69cdfb1aff4088460681d84189aa259762f97"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -991,9 +1136,15 @@ checksum = "82fe9db325bcef1fbcde82e078a5cc4efdf787e96b3b9cf45b50b529f2083d67"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
++[[package]]
++name = "shlex"
++version = "1.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
++
+ [[package]]
+ name = "signal-hook"
+ version = "0.3.17"
+@@ -1038,7 +1189,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d904e7009df136af5297832a3ace3370cd14ff1546a232f4f185036c2736fcac"
+ dependencies = [
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -1072,7 +1223,7 @@ dependencies = [
+  "proc-macro2",
+  "quote",
+  "rustversion",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -1088,9 +1239,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "syn"
+-version = "2.0.74"
++version = "2.0.77"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1fceb41e3d546d0bd83421d3409b1460cc7444cd389341a4c880fe7a042cb3d7"
++checksum = "9f35bcdf61fd8e7be6caf75f429fdca8beb3ed76584befb503b1569faee373ed"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+@@ -1120,7 +1271,7 @@ checksum = "1f718dfaf347dcb5b983bfc87608144b0bad87970aebcbea5ce44d2a30c08e63"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+ 
+ [[package]]
+@@ -1190,11 +1341,11 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
+ 
+ [[package]]
+ name = "unicorn-engine"
+-version = "2.0.1"
++version = "2.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f3b881bfd9837ff4f62e81a1e64b40a584604375ae0a73d0d5f09b7a72350b96"
++checksum = "5a8e0c066bfbe09a7f005ce8cd727bcff08fe1fb10bd14656e2627b5b4c00f80"
+ dependencies = [
+- "bitflags 1.3.2",
++ "bitflags",
+  "cc",
+  "cmake",
+  "libc",
+@@ -1238,6 +1389,18 @@ version = "0.11.0+wasi-snapshot-preview1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+ 
++[[package]]
++name = "which"
++version = "4.4.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
++dependencies = [
++ "either",
++ "home",
++ "once_cell",
++ "rustix",
++]
++
+ [[package]]
+ name = "winapi"
+ version = "0.3.9"
+@@ -1460,5 +1623,5 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.74",
++ "syn 2.0.77",
+ ]
+diff --git a/Cargo.toml b/Cargo.toml
+index 54e4837..cb4618f 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -11,8 +11,9 @@ test=false
+ bench=false
+ 
+ [dependencies]
+-unicorn-engine = "2.0.0"
++unicorn-engine = "2.1.0"
+ libafl = { version = "*"}
++libafl_targets = {version = "*"}
+ clap = { version = "4.0", features = ["derive"] }
+ ratatui = "0.28.0"
+ 
+diff --git a/build.rs b/build_BAK.rs
+similarity index 100%
+rename from build.rs
+rename to build_BAK.rs
+diff --git a/src/dynamic_analysis/Context/mod.rs b/src/dynamic_analysis/Context/mod.rs
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/src/dynamic_analysis/emu/context/mod.rs b/src/dynamic_analysis/emu/context/mod.rs
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/src/dynamic_analysis/emu/hooks.rs b/src/dynamic_analysis/emu/hooks.rs
+deleted file mode 100644
+index a377eef..0000000
+--- a/src/dynamic_analysis/emu/hooks.rs
++++ /dev/null
+@@ -1,16 +0,0 @@
+-// TODO: is CPU context correctly saved when emulation stopped inside a hook?
+-
+-// TODO: start uc_engine with user_data for custom context. Maybe make a wrapper struct with methods
+-
+-pub use unicorn_engine::RegisterARM;
+-pub use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
+-
+-
+-pub fn block_hook<'a, T>(uc: &'a mut unicorn_engine::Unicorn<'_, T>, loc: u64, sz: u32) {
+-    println!("Block hook : Address = {loc:#08x}, Size = {sz}");
+-}
+-
+-pub fn mem_hook<'a, T>(uc: &'a mut unicorn_engine::Unicorn<'_, T>,
+-                           acc_type: MemType, loc: u64, sz: u32, val: i64){
+-    println!("Memory hook ! ")
+-}
+diff --git a/src/dynamic_analysis/emu/hooks/arm32_hooks.rs b/src/dynamic_analysis/emu/hooks/arm32_hooks.rs
+new file mode 100644
+index 0000000..ea74885
+--- /dev/null
++++ b/src/dynamic_analysis/emu/hooks/arm32_hooks.rs
+@@ -0,0 +1,10 @@
++pub use unicorn_engine::unicorn_const::MemType;
++
++use crate::dynamic_analysis::emu::hooks::context;
++
++pub fn ARM_CORTEX_M3_PERIPHERAL_HOOK<'a, T>(uc: &'a mut unicorn_engine::Unicorn<'_, T>,
++                           acc_type: MemType, loc: u64, sz: usize, val: i64) -> bool{
++
++    println!("ARM_CORTEX_M3_PERIPHERAL_HOOK");
++    return true;
++}
+diff --git a/src/dynamic_analysis/emu/hooks/common_hooks.rs b/src/dynamic_analysis/emu/hooks/common_hooks.rs
+new file mode 100644
+index 0000000..7441dfe
+--- /dev/null
++++ b/src/dynamic_analysis/emu/hooks/common_hooks.rs
+@@ -0,0 +1,20 @@
++// TODO: is CPU context correctly saved when emulation stopped inside a hook?
++
++pub use libafl_targets::{EDGES_MAP, EDGES_MAP_SIZE_IN_USE};
++pub use unicorn_engine::unicorn_const::MemType;
++
++static mut PREV: u64 = 0;
++
++pub fn block_hook<'a, T>(uc: &'a mut unicorn_engine::Unicorn<'_, T>, loc: u64, sz: u32) {
++    println!("Block hook : Address = {loc:#08x}, Size = {sz}");
++
++    unsafe{
++        let hash = ( loc ^ PREV ) & ( EDGES_MAP_SIZE_IN_USE as u64 - 1 );
++        EDGES_MAP[hash as usize] += 1;
++        PREV = loc >> 1;
++    }
++}
++
++pub fn code_hook<'a , T>(uc: &'a mut unicorn_engine::Unicorn<'_, T>, loc:u64, sz: u32){
++    println!("Code hook : Address = {loc:#08x}, Size = {sz}");
++}
+diff --git a/src/dynamic_analysis/emu/hooks/context/mod.rs b/src/dynamic_analysis/emu/hooks/context/mod.rs
+new file mode 100644
+index 0000000..1b757c8
+--- /dev/null
++++ b/src/dynamic_analysis/emu/hooks/context/mod.rs
+@@ -0,0 +1,6 @@
++struct BasicBlock<T>{
++    start: u64,
++    size: u64,
++    next: (u64, Box<T>),
++}
++
+diff --git a/src/dynamic_analysis/emu/hooks/mod.rs b/src/dynamic_analysis/emu/hooks/mod.rs
+new file mode 100644
+index 0000000..1619d27
+--- /dev/null
++++ b/src/dynamic_analysis/emu/hooks/mod.rs
+@@ -0,0 +1,6 @@
++pub mod common_hooks;
++
++pub mod arm32_hooks;
++
++pub mod context;
++
+diff --git a/src/dynamic_analysis/emu/mod.rs b/src/dynamic_analysis/emu/mod.rs
+index d44ab07..a0710da 100644
+--- a/src/dynamic_analysis/emu/mod.rs
++++ b/src/dynamic_analysis/emu/mod.rs
+@@ -1,4 +1,4 @@
+-pub use unicorn_engine::RegisterARM;
++pub use unicorn_engine::{ArmCpuModel, RegisterARM};
+ pub use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
+ 
+ use crate::dynamic_analysis::emu::hooks::*;
+@@ -10,6 +10,8 @@ pub struct Emulator<'a, T>{
+     arch: Arch,
+     mode: Mode,
+     entry_point: u64,
++    timeout: u64,
++    count: u64
+ }
+ 
+ impl<'a, T> Emulator<'a, T> {
+@@ -20,27 +22,47 @@ impl<'a, T> Emulator<'a, T> {
+             arch,
+             mode,
+             entry_point: 0,
++            timeout: 0,
++            count: 0,
+         }
+     }
+ 
+-    pub fn setup(&mut self, code: &Vec<u8>){
++    pub fn setup(&mut self, code: &mut Vec<u8>){
+         match self.arch{
+             Arch::ARM => {
+-                if self.mode == Mode::LITTLE_ENDIAN {
+-                    // Setup initial stack
+-                    let sp = u32::from_le_bytes([code[0], code[1], code[2], code[3]]);
+-                    self.entry_point = u32::from_le_bytes([code[4], code[5], code[6], code[7]]) as u64;
+-                    self.uc.reg_write(RegisterARM::SP, sp as u64)
+-                        .expect("Failed to write sp");
+-
+-                    // Write code to memory
+-                    self.uc.mem_map(0x0, 0x20000000, Permission::EXEC)
+-                        .expect("Failed to map code section");
+-
+-                    // Map remaining address space as rw
+-                    self.uc.mem_map(0x20000000, 0xE0000000, Permission::READ | Permission::WRITE)
+-                        .expect("Failed to map remaining addr space");
+-                }
++                let sp: u32;
++                // Setup sp and entry point
++                // Match case is broken in unicorn 2.1.0 because of PartialEq removal from uc::Mode
++                /*
++                match self.mode{
++                    unicorn_engine::Mode::LITTLE_ENDIAN => {
++                        sp = u32::from_le_bytes([code[0], code[1], code[2], code[3]]);
++                        self.entry_point = u32::from_le_bytes([code[4], code[5], code[6], code[7]]) as u64;
++                    },
++                    _ => {
++                        sp = u32::from_be_bytes([code[0], code[1], code[2], code[3]]);
++                        self.entry_point = u32::from_be_bytes([code[4], code[5], code[6], code[7]]) as u64;
++                    }
++                }*/
++                sp = u32::from_le_bytes([code[0], code[1], code[2], code[3]]);
++                self.entry_point = u32::from_le_bytes([code[4], code[5], code[6], code[7]]) as u64;
++
++                self.uc.reg_write(RegisterARM::SP, sp as u64)
++                    .expect("Failed to write sp");
++
++                // Setup CPU model through ctl_set_cpu_model
++                self.uc.ctl_set_cpu_model(ArmCpuModel::UC_CPU_ARM_CORTEX_R5 as i32);
++
++                // Write code to memory
++                self.uc.mem_map(0x0, 0x20000000, Permission::EXEC)
++                    .expect("Failed to map code section");
++                self.uc.mem_write(0, code.as_mut_slice());
++
++
++                // Map remaining address space as rw
++                self.uc.mem_map(0x20000000, 0xE0000000, Permission::READ | Permission::WRITE)
++                    .expect("Failed to map remaining addr space");
++
+             },
+             _ => unimplemented!()
+         }
+@@ -48,7 +70,19 @@ impl<'a, T> Emulator<'a, T> {
+     }
+ 
+     fn init_basic_hooks(&mut self){
+-        self.uc.add_block_hook(hooks::block_hook)
++        self.uc.add_block_hook(0, 0x1FFFFFFF, hooks::common_hooks::block_hook)
+             .expect("Unable to add block hook");
++        self.uc.add_code_hook(0x0, 0x1FFFFFFF, hooks::common_hooks::code_hook)
++            .expect("Unable to add code hook");
++        match self.arch{
++            Arch::ARM => {
++                self.uc.add_mem_hook(HookType::MEM_ALL, 0x40000000, 0x20000000, hooks::arm32_hooks::ARM_CORTEX_M3_PERIPHERAL_HOOK);
++            },
++            _ => unimplemented!()
++        }
++    }
++
++    pub fn start_emu(&mut self){
++        self.uc.emu_start(self.entry_point, 0x1FFFFFFF, self.timeout, self.count as usize).expect("Error while running");
+     }
+ }
+diff --git a/src/dynamic_analysis/hooks.rs b/src/dynamic_analysis/hooks.rs
+deleted file mode 100644
+index 4a8a41f..0000000
+--- a/src/dynamic_analysis/hooks.rs
++++ /dev/null
+@@ -1,12 +0,0 @@
+-// TODO: is CPU context correctly saved when emulation stopped inside a hook?
+-
+-// TODO: start uc_engine with user_data for custom context. Maybe make a wrapper struct with methods
+-
+-
+-pub fn intr_hook<'a, 'b>(emu: &'a mut unicorn_engine::Unicorn<'b, ()>, num: u32) {
+-    println!("Interrupt : {num}");
+-}
+-
+-pub fn code_hook<'a, 'b>(emu: &'a mut unicorn_engine::Unicorn<'b, ()>, loc: u64, sz: u32) {
+-    println!("Code hook : Address = {loc:#08x}, Size = {sz}");
+-}
+diff --git a/src/dynamic_analysis/mod.rs b/src/dynamic_analysis/mod.rs
+index b021e2d..df7903d 100644
+--- a/src/dynamic_analysis/mod.rs
++++ b/src/dynamic_analysis/mod.rs
+@@ -1,16 +1,18 @@
+ use crate::FileInfo;
+ use std::error::Error;
+-use unicorn_engine::RegisterARM;
+-use unicorn_engine::unicorn_const::{Arch, HookType, MemType, Mode, Permission, SECOND_SCALE};
+-use libafl::inputs::BytesInput;
++use unicorn_engine::unicorn_const::{Arch, Mode};
+ 
+-mod hooks;
++mod emu;
+ 
+ pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
+     let mut code = fileinfo.contents;
+-
++    let mut ud: u64 = 0;
++    let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, ud);
++    emu.setup(&mut code);
++    emu.start_emu();
+     // Get reset vector
+     // ARM32
++    /*
+     let reset_handler = u32::from_le_bytes([code[4], code[5], code[6], code[7]]) as u64;
+     let sp = u32::from_le_bytes([code[0], code[1], code[2], code[3]]);
+ 
+@@ -38,8 +40,7 @@ pub fn run(fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
+         10 * SECOND_SCALE,
+         1000,
+     )
+-    .expect("Error while running");
+-    println!("Stopped running @ PC = {:?}", emu.reg_read(RegisterARM::PC).unwrap());
++    .expect("Error while running");*/
+     println!("Finished running");
+     Ok(())
+ 
