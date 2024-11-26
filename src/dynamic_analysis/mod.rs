@@ -37,51 +37,12 @@ use libafl_bolts::{
 
 // Emulator struct
 pub mod emu;
-use emu::input::{InputWrapper, InputIterator, CanLoadData};
+use emu::input::{InputWrapper, InputIterator, FuzzUserData};
 use emu::hooks::common_hooks::CanUpdateMap;
 
-#[allow(dead_code)]
-pub struct FuzzUserData<CM>{
-    input_object: InputWrapper,
-    cov_map:  CM,
-    cov_size: u64,
-}
 
-impl<'a> CanUpdateMap for FuzzUserData<&'a mut [u8]> {
-    unsafe fn update_map(&mut self, hash: u64){
-        let mut cur = self.cov_map[hash as usize];
-        cur = cur.overflowing_add(1).0;
-        self.cov_map[hash as usize] = cur;
-    }
-
-}
-
-impl<CM> CanLoadData for FuzzUserData<CM>{
-    fn load_bytes(&mut self, input: &BytesInput){
-        self.input_object.load_bytes(input);
-    }
-
-}
-
-impl<CM> InputIterator for FuzzUserData<CM>{
-   fn get_next_word(&mut self) -> [u8; 4]{
-        self.input_object.get_next_word()
-   }
-
-    fn reset(&mut self) -> Result<(), Box<dyn Error>>{
-        self.input_object.reset()
-    }
-}
-
-impl<CM> FuzzUserData<CM>{
-    fn new(input_object: InputWrapper, cov_map:CM, cov_size: u64) -> FuzzUserData<CM>{
-        Self{
-            input_object,
-            cov_map,
-            cov_size,
-        }
-    }
-}
+// Tunable constants
+pub const MAX_NUM_INTERRUPTS: u32 = 25;
 
 #[allow(non_snake_case, unused_variables, unused_mut)]
 pub fn emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
@@ -97,6 +58,7 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
     let mut EDGES_SIZE = libafl_targets::EDGES_MAP_SIZE_IN_USE;
     let mut EDGES = shmem_provider.new_shmem(EDGES_SIZE).unwrap();
     let EDGES_PTR = EDGES.as_slice_mut().as_mut_ptr();
+
      // Create harness
     let mut harness = |input: &BytesInput|{
         let EDGES_MAP = EDGES.as_slice_mut();
@@ -106,15 +68,16 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
         emu.setup(&mut fileinfo.contents);
         let ud = emu.get_mut_data();
         ud.reset().expect("Error while resetting Input object");
-        ud.load_bytes(input);
         let emu_result = emu.start_emu();
         match emu_result {
             Ok(()) => ExitKind::Ok,
             Err(uc_error) => ExitKind::Crash,
         }
     };
+
     let monitor = TuiMonitor::builder().title(String::from("Fuzzer")).build();
     let mut mgr = SimpleEventManager::new(monitor);
+
     let edges_observer = unsafe {
         HitcountsMapObserver::new(ConstMapObserver::<_, EDGES_MAP_SIZE_IN_USE>::from_mut_ptr(
             "edges",
@@ -122,6 +85,7 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
         )).track_indices()
     };
     let time_observer = TimeObserver::new("time");
+
     let mut feedback = feedback_or!(
         MaxMapFeedback::new(&edges_observer),
         TimeFeedback::new(&time_observer)
