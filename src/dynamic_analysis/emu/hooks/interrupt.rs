@@ -1,7 +1,5 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-use unicorn_engine::{Unicorn, RegisterARM};
 use unicorn_engine::unicorn_const::uc_error;
+use unicorn_engine::{RegisterARM, Unicorn};
 
 const SCB_ICSR: u64 = 0xE000_ED04;
 const SCB_VTOR: u64 = 0xE000_ED08;
@@ -28,8 +26,10 @@ pub fn should_preempt(current_isr: u32, pending_isr: u32) -> bool {
     pending_isr > current_isr
 }
 
-pub fn handle_interrupt<T>(uc: &mut Unicorn<'_,T>, state: &mut InterruptState) -> Result<(), uc_error> {
-
+pub fn handle_interrupt<T>(
+    uc: &mut Unicorn<'_, T>,
+    state: &mut InterruptState,
+) -> Result<(), uc_error> {
     // Check if there are any pending interrupts
     if state.pending_interrupts.is_empty() {
         return Ok(());
@@ -71,12 +71,12 @@ pub fn handle_interrupt<T>(uc: &mut Unicorn<'_,T>, state: &mut InterruptState) -
 
     // TODO: LR logic is in the arm tech reference manual, match it here
     uc.reg_write(RegisterARM::LR, 0xFFFFFFF9)?;
-    let mut buf : [u8; 4] = [0, 0, 0, 0];
+    let mut buf: [u8; 4] = [0, 0, 0, 0];
     uc.mem_read(SCB_VTOR, &mut buf)?;
     let vtor_value = u32::from_le_bytes(buf);
 
     let vector_table_entry = vtor_value + (interrupt_number * 4);
-    let mut buf : [u8; 4] = [0, 0, 0, 0];
+    let mut buf: [u8; 4] = [0, 0, 0, 0];
     uc.mem_read(vector_table_entry as u64, &mut buf)?;
     let isr_addr = u32::from_le_bytes(buf);
     // Go to isr
@@ -85,14 +85,13 @@ pub fn handle_interrupt<T>(uc: &mut Unicorn<'_,T>, state: &mut InterruptState) -
     Ok(())
 }
 
-
 // fetch_prot hook is not required see : https://github.com/unicorn-engine/unicorn/blob/dev/docs/FAQ.md#how-to-emulate-interrupts-or-ticks-with-unicorn
 // Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
 // Example in unit tests
 pub fn handle_exception_return<T>(
     uc: &mut Unicorn<'_, T>,
     state: &mut InterruptState,
-    exc_return: u64
+    _exc_return: u64,
 ) -> Result<(), uc_error> {
     // TODO: Need hook for executing 0xFFFFFF00 to whatver
 
@@ -124,5 +123,3 @@ pub fn handle_exception_return<T>(
 
     Ok(())
 }
-
-

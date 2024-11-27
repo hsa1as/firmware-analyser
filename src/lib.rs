@@ -5,8 +5,8 @@ use std::vec::Vec;
 
 use clap::{Parser, ValueEnum};
 
-mod static_analysis;
 mod dynamic_analysis;
+mod static_analysis;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -25,7 +25,7 @@ pub struct Args {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-enum AnalysisMode{
+enum AnalysisMode {
     // Fuzzy-hash matching
     Static,
 
@@ -34,7 +34,6 @@ enum AnalysisMode{
 
     // Pure emulation
     Emulate,
-
 }
 
 #[derive(Default, Debug)]
@@ -61,8 +60,8 @@ pub fn run(args: Args) -> Result<(), Box<dyn Error>> {
     let mut fileinfo = FileInfo::default();
     fileinfo.init(&args.file_name);
 
-    match args.mode{
-        AnalysisMode::Static =>{
+    match args.mode {
+        AnalysisMode::Static => {
             let _ = static_analysis::run(fileinfo);
         }
         AnalysisMode::Dynamic => {

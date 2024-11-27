@@ -1,25 +1,23 @@
-
 use core::num::NonZeroUsize;
 #[allow(unused_imports)]
 use std::{
     borrow::Cow,
-    hash::{DefaultHasher, Hash, Hasher},
     error::Error,
+    hash::{DefaultHasher, Hash, Hasher},
 };
 
 #[allow(unused_imports)]
 use libafl::{
     corpus::CorpusId,
     generators::{Generator, RandBytesGenerator},
-    inputs::{BytesInput, HasTargetBytes, HasMutatorBytes, Input, MutVecInput},
+    inputs::{BytesInput, HasMutatorBytes, HasTargetBytes, Input, MutVecInput},
     mutators::{MutationResult, Mutator},
     state::HasRand,
     Error as libAFLError, SerdeAny,
 };
-use libafl_bolts::{rands::Rand, Named, HasLen, AsSlice};
+use libafl_bolts::{rands::Rand, Named};
 
 use serde::{Deserialize, Serialize};
-
 
 // Crate imports
 pub use crate::dynamic_analysis::emu::hooks::common_hooks::CanUpdateMap;
@@ -27,140 +25,134 @@ use crate::dynamic_analysis::MAX_NUM_INTERRUPTS;
 
 pub trait InputIterator {
     fn get_next_word(&mut self) -> [u8; 4];
-    fn reset(&mut self) -> Result<(), Box<dyn Error>>;
+    fn get_next_interrupt(&mut self) -> (u32, u32);
 }
 
-// InputWrapper to hold input for peripheral reads, addresses for interrupts, and interrupt numbers
+// CombinedInput to hold input for peripheral reads, addresses for interrupts, and interrupt numbers
+// This is the object actually created by the fuzzer
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, SerdeAny)]
-pub struct InputWrapper{
+pub struct CombinedInput {
     bytes: Vec<u8>,
-    idx: usize,
-    intr_addrs: Vec<(u32,u32)>,
+    intr_addrs: Vec<(u32, u32)>,
 }
 
-impl InputWrapper{
-    pub fn new() -> InputWrapper{
-        InputWrapper{
+impl CombinedInput {
+    pub fn new() -> CombinedInput {
+        CombinedInput {
             bytes: Vec::<u8>::new(),
-            idx: 0,
             intr_addrs: Vec::<(u32, u32)>::new(),
+        }
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn bytes_mut(&mut self) -> MutVecInput<'_> {
+        (&mut self.bytes).into()
+    }
+}
+
+pub struct InputWrapper<'a> {
+    bytes: &'a Vec<u8>,
+    idx_bytes: usize,
+    intr_addrs: &'a Vec<(u32, u32)>,
+    idx_intrs: usize,
+}
+
+impl<'a> InputWrapper<'a> {
+    pub fn new(bytes: &'a Vec<u8>, intr_addrs: &'a Vec<(u32, u32)>) -> Self {
+        Self {
+            bytes,
+            idx_bytes: 0,
+            intr_addrs,
+            idx_intrs: 0,
         }
     }
 }
 
+impl<'a> From<&'a CombinedInput> for InputWrapper<'a> {
+    fn from(value: &'a CombinedInput) -> Self {
+        InputWrapper::new(&value.bytes, &value.intr_addrs)
+    }
+}
 
-impl InputIterator for InputWrapper{
-    fn get_next_word(&mut self) -> [u8; 4]{
+impl<'a> InputIterator for InputWrapper<'a> {
+    fn get_next_word(&mut self) -> [u8; 4] {
         if self.bytes.is_empty() {
-            return [0, 0, 0, 0]
+            return [0, 0, 0, 0];
         }
-        let mut a: [u8; 4] = [0,0,0,0];
+        let mut a: [u8; 4] = [0, 0, 0, 0];
         let mut i: usize = 0;
-        while self.idx < self.bytes.len() && i < 4 {
-            a[i] = self.bytes[self.idx];
-            self.idx += 1;
+        while self.idx_bytes < self.bytes.len() && i < 4 {
+            a[i] = self.bytes[self.idx_bytes];
+            self.idx_bytes += 1;
             i += 1;
         }
         a
     }
-
-    fn reset(&mut self) -> Result<(), Box<dyn Error>>{
-        self.idx = 0;
-        self.bytes.clear();
-        Ok(())
+    fn get_next_interrupt(&mut self) -> (u32, u32) {
+        let retval = self.intr_addrs[self.idx_intrs];
+        self.idx_intrs = self.idx_intrs.checked_add(1).expect("You had one job");
+        return retval;
     }
 }
 
-#[allow(dead_code)]
-pub struct FuzzUserData<CM>{
-    input_object: InputWrapper,
-    cov_map:  CM,
-    cov_size: u64,
-}
-
-impl<'a> CanUpdateMap for FuzzUserData<&'a mut [u8]> {
-    unsafe fn update_map(&mut self, hash: u64){
-        let mut cur = self.cov_map[hash as usize];
-        cur = cur.overflowing_add(1).0;
-        self.cov_map[hash as usize] = cur;
-    }
-
-}
-
-impl<CM> InputIterator for FuzzUserData<CM>{
-   fn get_next_word(&mut self) -> [u8; 4]{
-        self.input_object.get_next_word()
-   }
-
-    fn reset(&mut self) -> Result<(), Box<dyn Error>>{
-        self.input_object.reset()
-    }
-}
-
-impl<CM> FuzzUserData<CM>{
-    pub fn new(input_object: InputWrapper, cov_map:CM, cov_size: u64) -> FuzzUserData<CM>{
-        Self{
-            input_object,
-            cov_map,
-            cov_size,
-        }
-    }
-}
-
-impl Input for InputWrapper{
-    fn generate_name(&self, _id: Option<CorpusId>) -> String  {
+impl Input for CombinedInput {
+    fn generate_name(&self, _id: Option<CorpusId>) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         format!("{:016x}", hasher.finish())
     }
 }
 
-pub struct FuzzingInputGenerator<S> where S: HasRand{
-    pub bytes_generator: RandBytesGenerator<S>,
+pub struct FuzzingInputGenerator {
+    pub bytes_generator: RandBytesGenerator,
     pub code_lower: u32,
     pub code_upper: u32,
-    pub max_intr_num: u32,
+    pub max_intr_num: NonZeroUsize,
 }
 
-impl<S> FuzzingInputGenerator<S> where S: HasRand{
+impl FuzzingInputGenerator {
     pub fn new(max_len: NonZeroUsize, code_lower: u32, code_upper: u32, max_intr_num: u32) -> Self {
-        Self{
+        Self {
             bytes_generator: RandBytesGenerator::new(max_len.into()),
             code_lower,
             code_upper,
-            max_intr_num,
+            max_intr_num: NonZeroUsize::new(max_intr_num as usize).unwrap(),
         }
     }
 }
 
 // create mechanism to generate inputs from scratch.
 // I dont know why
-impl<S> Generator<InputWrapper, S> for FuzzingInputGenerator<S> where S: HasRand{
-    fn generate(&mut self, state: &mut S) -> Result<InputWrapper, libAFLError>{
-
+impl<S> Generator<CombinedInput, S> for FuzzingInputGenerator
+where
+    S: HasRand,
+{
+    fn generate(&mut self, state: &mut S) -> Result<CombinedInput, libAFLError> {
         // Generate input bytes, to be used when peripheral read occurs
         let generator = &mut self.bytes_generator;
         let bytes_input = generator.generate(state).unwrap().target_bytes().to_vec();
 
         // Do generation for interrupt numbers, interrupt addresses on our own here
-        let mut rand_obj = state.rand_mut();
+        let rand_obj = state.rand_mut();
 
         // How many interrupts are going to be raised?
-        let num_of_interrupts = rand_obj.below(MAX_NUM_INTERRUPTS as usize);
-        let mut intr_addrs_vec = vec![(0_u32, 0_u32); num_of_interrupts];
+        let num_of_interrupts =
+            rand_obj.below(NonZeroUsize::new(MAX_NUM_INTERRUPTS as usize).unwrap()) as u32;
+        let mut intr_addrs_vec = vec![(0_u32, 0_u32); num_of_interrupts as usize];
         // TODO: is it okay to use the same rand object to generate random bytes
         // for unrelated parts of the input?
-        for elem in intr_addrs_vec.iter_mut(){
+        for elem in intr_addrs_vec.iter_mut() {
             (*elem).0 = rand_obj.between(self.code_lower as usize, self.code_upper as usize) as u32;
-            (*elem).0 = rand_obj.below(self.max_intr_num as usize) as u32;
+            (*elem).0 = rand_obj.below(self.max_intr_num) as u32;
         }
 
-        Ok(InputWrapper{
+        Ok(CombinedInput {
             bytes: bytes_input,
-            idx: 0_usize,
             intr_addrs: intr_addrs_vec,
         })
-
     }
 }
 
@@ -171,4 +163,143 @@ impl<S> Generator<InputWrapper, S> for FuzzingInputGenerator<S> where S: HasRand
 // 3. Change existing interrupt number
 // 4. Remove existing interrupt
 // 5. Use existing havoc mutators for the input field
+pub struct InterruptAddMutator {
+    code_lower: u32,
+    code_upper: u32,
+    max_intr_num: NonZeroUsize,
+}
+pub struct InterruptModifyMutator {
+    code_lower: u32,
+    code_upper: u32,
+    max_intr_num: NonZeroUsize,
+}
+pub struct InterruptRemoveMutator;
 
+impl Named for InterruptAddMutator {
+    fn name(&self) -> &Cow<'static, str> {
+        &Cow::Borrowed("InterruptAddMutator")
+    }
+}
+
+impl Named for InterruptModifyMutator {
+    fn name(&self) -> &Cow<'static, str> {
+        &Cow::Borrowed("InterruptModifyMutator")
+    }
+}
+
+impl Named for InterruptRemoveMutator {
+    fn name(&self) -> &Cow<'static, str> {
+        &Cow::Borrowed("InterruptRemoveMutator")
+    }
+}
+
+impl<S> Mutator<CombinedInput, S> for InterruptAddMutator
+where
+    S: HasRand,
+{
+    fn mutate(
+        &mut self,
+        state: &mut S,
+        input: &mut CombinedInput,
+    ) -> Result<MutationResult, libAFLError> {
+        // If we have too many interrupt addresses, skip the mutation
+        if input.intr_addrs.len() as u32 >= MAX_NUM_INTERRUPTS {
+            return Ok(MutationResult::Skipped);
+        }
+        let rand_obj = state.rand_mut();
+        // Get the new thing
+        let new_addr = rand_obj.between(self.code_lower as usize, self.code_upper as usize) as u32;
+        let new_intr = rand_obj.below(self.max_intr_num) as u32;
+
+        // Get Index to add to
+        let intr_addr_size = input.intr_addrs.len();
+        let idx = rand_obj.below(NonZeroUsize::new(intr_addr_size + 1).unwrap());
+        if idx == intr_addr_size {
+            // add to end of the vector
+            input.intr_addrs.push((new_addr, new_intr));
+        } else {
+            // add to idx
+            input.intr_addrs.insert(idx, (new_addr, new_intr));
+        }
+        Ok(MutationResult::Mutated)
+    }
+}
+
+impl<S> Mutator<CombinedInput, S> for InterruptModifyMutator
+where
+    S: HasRand,
+{
+    fn mutate(
+        &mut self,
+        state: &mut S,
+        input: &mut CombinedInput,
+    ) -> Result<MutationResult, libAFLError> {
+        // Select an index to mutate
+        let idx = state.rand_mut().choose(&mut input.intr_addrs).unwrap();
+        let rand_obj = state.rand_mut();
+        // Get the new thing
+        let new_addr = rand_obj.between(self.code_lower as usize, self.code_upper as usize) as u32;
+        let new_intr = rand_obj.below(self.max_intr_num) as u32;
+
+        *idx = (new_addr, new_intr);
+        Ok(MutationResult::Mutated)
+    }
+}
+
+impl<S> Mutator<CombinedInput, S> for InterruptRemoveMutator
+where
+    S: HasRand,
+{
+    fn mutate(
+        &mut self,
+        state: &mut S,
+        input: &mut CombinedInput,
+    ) -> Result<MutationResult, libAFLError> {
+        let vec = &mut input.intr_addrs;
+        if vec.is_empty() {
+            return Ok(MutationResult::Skipped);
+        }
+
+        // choose index to remove
+        let idx = state
+            .rand_mut()
+            .below(NonZeroUsize::new(vec.len()).unwrap());
+        vec.remove(idx);
+        Ok(MutationResult::Mutated)
+    }
+}
+
+#[allow(dead_code)]
+pub struct FuzzUserData<'a, CM> {
+    input_object: InputWrapper<'a>,
+    cov_map: CM,
+    cov_size: u64,
+}
+
+impl<'a> CanUpdateMap for FuzzUserData<'a, &'a mut [u8]> {
+    unsafe fn update_map(&mut self, hash: u64) {
+        let mut cur = self.cov_map[hash as usize];
+        cur = cur.overflowing_add(1).0;
+        self.cov_map[hash as usize] = cur;
+    }
+}
+
+impl<'a, CM> InputIterator for FuzzUserData<'a, CM> {
+    fn get_next_word(&mut self) -> [u8; 4] {
+        self.input_object.get_next_word()
+    }
+
+    fn get_next_interrupt(&mut self) -> (u32, u32) {
+        self.input_object.get_next_interrupt()
+    }
+}
+
+impl<'a, CM> FuzzUserData<'a, CM> {
+    pub fn new(input_object: InputWrapper<'a>, cov_map: CM, cov_size: u64) -> FuzzUserData<CM> {
+        Self {
+            input_object,
+            cov_map,
+            cov_size,
+        }
+    }
+}

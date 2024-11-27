@@ -12,9 +12,9 @@ bench=false
 
 [dependencies]
 unicorn-engine = "2.1.1"
-libafl = { version = "0.13.2"}
-libafl_targets = {version = "0.13.2"}
-libafl_bolts = {version = "0.13.2"}
+libafl = { version = "0.14.0", features = ["tui_monitor"]}
+libafl_targets = {version = "0.14.0"}
+libafl_bolts = {version = "0.14.0"}
 clap = { version = "4.0", features = ["derive"] }
 ratatui = "0.28.0"
 crossterm = "*"
