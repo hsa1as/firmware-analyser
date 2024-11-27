@@ -16,8 +16,7 @@ use ratatui::{
     Terminal,
 };
 
-use libafl_targets::EDGES_MAP_SIZE_IN_USE;
-
+use crate::dynamic_analysis::MAP_SIZE;
 pub trait CanUpdateMap {
     unsafe fn update_map(&mut self, _: u64);
 }
@@ -27,7 +26,7 @@ static mut PREV: u64 = 0;
 pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     unsafe {
         let mut fud = uc.get_data_mut();
-        let hash = (loc ^ PREV) & (EDGES_MAP_SIZE_IN_USE as u64 - 1);
+        let hash = (loc ^ PREV) & (MAP_SIZE as u64 - 1);
         fud.update_map(hash);
         PREV = loc >> 1;
     }
@@ -78,6 +77,9 @@ pub fn mem_hook<T>(
         }
     }
 }
+
+#[allow(unused)]
+pub fn do_interrupt<T>(uc: &mut Unicorn<'_, T>, loc: u64, val: u32) {}
 
 #[allow(unused)]
 fn dump_arm_registers<T>(uc: &mut Unicorn<'_, T>) {

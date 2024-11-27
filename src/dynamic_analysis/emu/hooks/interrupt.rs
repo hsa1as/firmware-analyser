@@ -93,8 +93,6 @@ pub fn handle_exception_return<T>(
     state: &mut InterruptState,
     _exc_return: u64,
 ) -> Result<(), uc_error> {
-    // TODO: Need hook for executing 0xFFFFFF00 to whatver
-
     state.active_interrupts.pop();
 
     let sp = uc.reg_read(RegisterARM::SP)?;

@@ -18,6 +18,7 @@ use libafl::{
 use libafl_bolts::{rands::Rand, Named};
 
 use serde::{Deserialize, Serialize};
+use unicorn_engine::UcHookId;
 
 // Crate imports
 pub use crate::dynamic_analysis::emu::hooks::common_hooks::CanUpdateMap;
@@ -25,7 +26,7 @@ use crate::dynamic_analysis::MAX_NUM_INTERRUPTS;
 
 pub trait InputIterator {
     fn get_next_word(&mut self) -> [u8; 4];
-    fn get_next_interrupt(&mut self) -> (u32, u32);
+    fn get_next_interrupt(&mut self) -> Result<(u32, u32), i32>;
 }
 
 // CombinedInput to hold input for peripheral reads, addresses for interrupts, and interrupt numbers
@@ -91,10 +92,13 @@ impl<'a> InputIterator for InputWrapper<'a> {
         }
         a
     }
-    fn get_next_interrupt(&mut self) -> (u32, u32) {
+    fn get_next_interrupt(&mut self) -> Result<(u32, u32), i32> {
+        if self.idx_intrs >= self.intr_addrs.len() {
+            return Err(-1);
+        }
         let retval = self.intr_addrs[self.idx_intrs];
         self.idx_intrs = self.idx_intrs.checked_add(1).expect("You had one job");
-        return retval;
+        return Ok(retval);
     }
 }
 
@@ -274,6 +278,7 @@ pub struct FuzzUserData<'a, CM> {
     input_object: InputWrapper<'a>,
     cov_map: CM,
     cov_size: u64,
+    last_intr_addr: Option<UcHookId>,
 }
 
 impl<'a> CanUpdateMap for FuzzUserData<'a, &'a mut [u8]> {
@@ -289,7 +294,7 @@ impl<'a, CM> InputIterator for FuzzUserData<'a, CM> {
         self.input_object.get_next_word()
     }
 
-    fn get_next_interrupt(&mut self) -> (u32, u32) {
+    fn get_next_interrupt(&mut self) -> Result<(u32, u32), i32> {
         self.input_object.get_next_interrupt()
     }
 }
@@ -300,6 +305,7 @@ impl<'a, CM> FuzzUserData<'a, CM> {
             input_object,
             cov_map,
             cov_size,
+            last_intr_addr: None,
         }
     }
 }

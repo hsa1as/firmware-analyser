@@ -8,7 +8,7 @@ use unicorn_engine::{ArmCpuModel, Context, RegisterARM};
 
 // Hooks
 pub mod hooks;
-pub use hooks::common_hooks::CanUpdateMap;
+pub use hooks::common_hooks::{do_interrupt, CanUpdateMap};
 pub use hooks::interrupt::InterruptState;
 
 // Std
@@ -165,6 +165,9 @@ where
                 self.uc
                     .add_intr_hook(sw_intr_handle)
                     .expect("Unable to add interrupt hook to handle EXC_RETURN for ARM");
+
+                // Schedule the first interrupt to arrive
+                self.schedule_next_interrupt();
             }
             _ => unimplemented!(),
         }
@@ -181,5 +184,14 @@ where
 
     pub fn get_mut_data(&mut self) -> &mut T {
         self.uc.get_data_mut()
+    }
+
+    pub fn schedule_next_interrupt(&mut self) {
+        let fud = self.uc.get_data_mut();
+        // Get Next interrupt to be scheduled
+        let (next_intr_addr, next_intr_num) = fud.get_next_interrupt().unwrap();
+        let uc_hook_id =
+            self.uc
+                .add_code_hook(next_intr_addr as u64, next_intr_addr as u64, do_interrupt);
     }
 }
