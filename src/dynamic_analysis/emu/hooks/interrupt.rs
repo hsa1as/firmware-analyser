@@ -19,7 +19,7 @@ pub struct ArmV7Nvic {
     NVIC_Pending: Vec<bool>,
     // Each exception has a u8 priority number
     // ARmv7-M B3.4.9 has registers to set/read priority of exceptions
-    NVIC_ExcPrio: Vec<u8>,
+    NVIC_ExcPrio: Vec<i16>,
     // ARmv7-M B3.4.8 has registers to show status
     NVIC_ExcAct: Vec<bool>, // Exc active?
     // Armv7-M B3.4.4 - B3.4.5 has registers to enable/disable interrupts
@@ -33,7 +33,7 @@ impl ArmV7Nvic {
             NVIC_Pending: vec![false; ARMV7_MAX_INTERRUPTS],
             // I dont think all interrupts have configurable priority, but we will create a
             // vec of full size
-            NVIC_ExcPrio: vec![0u8; ARMV7_MAX_INTERRUPTS],
+            NVIC_ExcPrio: vec![0i16; ARMV7_MAX_INTERRUPTS],
             NVIC_ExcAct: vec![false; ARMV7_MAX_INTERRUPTS],
             NVIC_ExcEnabled: vec![true; ARMV7_MAX_INTERRUPTS],
         }
@@ -55,7 +55,7 @@ impl ArmV7Nvic {
         self.NVIC_Pending[intno as usize] = false;
     }
 
-    pub fn set_prio(&mut self, intno: u32, prio: u8) {
+    pub fn set_prio(&mut self, intno: u32, prio: i16) {
         self.NVIC_ExcPrio[intno as usize] = prio;
     }
 
