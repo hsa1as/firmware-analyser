@@ -7,6 +7,63 @@ const ICSR_VECTACTIVE_MASK: u32 = 0x1FF;
 const ICSR_RETTOBASE: u32 = 1 << 11;
 const ICSR_VECTPENDING_MASK: u32 = 0x1FF << 12;
 
+// Armv7-M NVIC has 15 32 bit registers for operations on interrupt configs. => 15th register's
+// upper 16 bits are reserved. => total of 496 interrupts that are supported
+
+const ARMV7_MAX_INTERRUPTS: usize = 496;
+
+#[allow(non_snake_case)]
+pub struct ArmV7Nvic {
+    vtor: u32,
+    // ARMv7-M B3.4.6 - B3.4.7 Have registers to set/clear pend
+    NVIC_Pending: Vec<bool>,
+    // Each exception has a u8 priority number
+    // ARmv7-M B3.4.9 has registers to set/read priority of exceptions
+    NVIC_ExcPrio: Vec<u8>,
+    // ARmv7-M B3.4.8 has registers to show status
+    NVIC_ExcAct: Vec<bool>, // Exc active?
+    // Armv7-M B3.4.4 - B3.4.5 has registers to enable/disable interrupts
+    NVIC_ExcEnabled: Vec<bool>, // Exc enabled?
+}
+
+impl ArmV7Nvic {
+    pub fn new() -> Self {
+        Self {
+            vtor: 0,
+            NVIC_Pending: vec![false; ARMV7_MAX_INTERRUPTS],
+            // I dont think all interrupts have configurable priority, but we will create a
+            // vec of full size
+            NVIC_ExcPrio: vec![0u8; ARMV7_MAX_INTERRUPTS],
+            NVIC_ExcAct: vec![false; ARMV7_MAX_INTERRUPTS],
+            NVIC_ExcEnabled: vec![true; ARMV7_MAX_INTERRUPTS],
+        }
+    }
+
+    pub fn set_exc_active(&mut self, intno: u32) {
+        self.NVIC_ExcAct[intno as usize] = true;
+    }
+
+    pub fn set_exc_inactive(&mut self, intno: u32) {
+        self.NVIC_ExcAct[intno as usize] = false;
+    }
+
+    pub fn exc_pend(&mut self, intno: u32) {
+        self.NVIC_Pending[intno as usize] = true;
+    }
+
+    pub fn exc_unpend(&mut self, intno: u32) {
+        self.NVIC_Pending[intno as usize] = false;
+    }
+
+    pub fn set_prio(&mut self, intno: u32, prio: u8) {
+        self.NVIC_ExcPrio[intno as usize] = prio;
+    }
+
+    pub fn write_vtor(&mut self, new_vtor: u32) {
+        self.vtor = new_vtor;
+    }
+}
+
 #[derive(Debug)]
 pub struct InterruptState {
     active_interrupts: Vec<u32>,
