@@ -17,13 +17,19 @@ pub struct ArmV7Nvic {
     vtor: u32,
     // ARMv7-M B3.4.6 - B3.4.7 Have registers to set/clear pend
     NVIC_Pending: Vec<bool>,
-    // Each exception has a u8 priority number
+    // Each exception has an 8-bit signed priority number
     // ARmv7-M B3.4.9 has registers to set/read priority of exceptions
     NVIC_ExcPrio: Vec<i16>,
     // ARmv7-M B3.4.8 has registers to show status
     NVIC_ExcAct: Vec<bool>, // Exc active?
     // Armv7-M B3.4.4 - B3.4.5 has registers to enable/disable interrupts
     NVIC_ExcEnabled: Vec<bool>, // Exc enabled?
+
+    // Current pending interrupt number
+    current_irqn: Option<u32>,
+    // Current pending interrupt's priority
+    current_prio: i32,
+    //
 }
 
 impl ArmV7Nvic {
@@ -36,6 +42,9 @@ impl ArmV7Nvic {
             NVIC_ExcPrio: vec![0i16; ARMV7_MAX_INTERRUPTS],
             NVIC_ExcAct: vec![false; ARMV7_MAX_INTERRUPTS],
             NVIC_ExcEnabled: vec![true; ARMV7_MAX_INTERRUPTS],
+            current_irqn: None,
+            current_prio: 256, // start at highest possible PRIO : 256 for 8 bit priorities :
+                               // IMPLEMENTATION_DEFINED number of priority bits
         }
     }
 
