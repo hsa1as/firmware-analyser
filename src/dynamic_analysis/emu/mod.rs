@@ -3,13 +3,15 @@ pub mod input;
 use input::InputIterator;
 
 // Unicorn imports
-use unicorn_engine::unicorn_const::{uc_error, Arch, HookType, Mode, Permission, SECOND_SCALE};
-use unicorn_engine::{ArmCpuModel, Context, RegisterARM};
+use unicorn_engine::unicorn_const::{
+    uc_error, Arch, HookType, MemType, Mode, Permission, SECOND_SCALE,
+};
+use unicorn_engine::{ArmCpuModel, Context, RegisterARM, Unicorn};
 
 // Hooks
 pub mod hooks;
 pub use hooks::common_hooks::{do_interrupt, CanUpdateMap};
-pub use hooks::interrupt::InterruptState;
+pub use hooks::interrupt::{ArmV7Nvic, InterruptState};
 
 // Std
 use std::cell::RefCell;
@@ -30,8 +32,7 @@ where
     T: InputIterator + CanUpdateMap,
 {
     pub fn new(arch: Arch, mode: Mode, ud: T) -> Emulator<'a, T> {
-        let uc_n = unicorn_engine::Unicorn::new_with_data(arch, mode, ud)
-            .expect("Unable to create uc emulator");
+        let uc_n = Unicorn::new_with_data(arch, mode, ud).expect("Unable to create uc emulator");
         Emulator {
             uc: uc_n,
             arch,
@@ -127,6 +128,19 @@ where
                         hooks::common_hooks::mem_hook,
                     )
                     .expect("Unable to add invalid r/w hook to 0xF0000000+");
+                // Add hook to handle writes to Armv7-NVIC registers
+                let nvic_rc = Rc::new(RefCell::new(ArmV7Nvic::new()));
+                let handle_nvic_acc = move |uc: &mut Unicorn<'_, T>,
+                                            acc_type: MemType,
+                                            loc: u64,
+                                            sz: usize,
+                                            val: i64|
+                      -> bool {
+                    let mut nvic_borr = (*nvic_rc).borrow_mut();
+                    hooks::arm32_hooks::armv7_nvic_hooks(uc, acc_type, loc, sz, val, &mut nvic_borr)
+                };
+                self.uc
+                    .add_mem_hook(HookType::MEM_ALL, 0xE000E100, 0xE000ECFC, handle_nvic_acc);
 
                 // Setup an interrupt state to be moved into the two exception callbacks
                 let interrupt_state = InterruptState::new();

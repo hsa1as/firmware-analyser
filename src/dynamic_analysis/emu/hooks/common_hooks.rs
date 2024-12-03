@@ -1,4 +1,4 @@
-use std::{io, panic};
+use std::io;
 
 use unicorn_engine::unicorn_const::MemType;
 use unicorn_engine::{Arch, RegisterARM, Unicorn};

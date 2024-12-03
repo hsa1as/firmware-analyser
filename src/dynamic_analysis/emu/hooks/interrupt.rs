@@ -39,20 +39,16 @@ impl ArmV7Nvic {
         }
     }
 
-    pub fn set_exc_active(&mut self, intno: u32) {
-        self.NVIC_ExcAct[intno as usize] = true;
+    pub fn exc_active(&mut self, intno: u32, act: bool) {
+        self.NVIC_ExcAct[intno as usize] = act;
     }
 
-    pub fn set_exc_inactive(&mut self, intno: u32) {
-        self.NVIC_ExcAct[intno as usize] = false;
+    pub fn exc_pend(&mut self, intno: u32, pend: bool) {
+        self.NVIC_Pending[intno as usize] = pend;
     }
 
-    pub fn exc_pend(&mut self, intno: u32) {
-        self.NVIC_Pending[intno as usize] = true;
-    }
-
-    pub fn exc_unpend(&mut self, intno: u32) {
-        self.NVIC_Pending[intno as usize] = false;
+    pub fn exc_enable(&mut self, intno: u32, en: bool) {
+        self.NVIC_ExcEnabled[intno as usize] = en;
     }
 
     pub fn set_prio(&mut self, intno: u32, prio: i16) {
