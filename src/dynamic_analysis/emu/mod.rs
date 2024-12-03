@@ -118,6 +118,7 @@ where
                         hooks::common_hooks::mem_hook,
                     )
                     .expect("Unable to add invalid mem access hook");
+                // This is not needed as unicorn engine implements sw intr to intno 8 for exc_return
                 self.uc
                     .add_mem_hook(
                         HookType::MEM_READ_PROT | HookType::MEM_WRITE_PROT,

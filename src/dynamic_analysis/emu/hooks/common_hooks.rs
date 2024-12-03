@@ -53,23 +53,28 @@ pub fn mem_hook<T>(
     match mem_type {
         MemType::WRITE_PROT => {
             debug_output(uc);
-            panic!("Write to non-writeable memory");
+            println!("Write to non-writeable memory");
+            false
         }
         MemType::FETCH_PROT => {
             debug_output(uc);
-            panic!("Executing non executable memory");
+            println!("Executing non executable memory");
+            false
         }
         MemType::READ_UNMAPPED => {
             debug_output(uc);
-            panic!("Reading unmapped memory");
+            println!("Reading unmapped memory");
+            false
         }
         MemType::WRITE_UNMAPPED => {
             debug_output(uc);
-            panic!("Writing to unmapped memory");
+            println!("Writing to unmapped memory");
+            false
         }
         MemType::FETCH_UNMAPPED => {
             debug_output(uc);
-            panic!("Executing from unmapped memory");
+            println!("Executing from unmapped memory");
+            false
         }
         _ => {
             println!("This shouldn't have happened");
