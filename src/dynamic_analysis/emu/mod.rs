@@ -25,6 +25,7 @@ pub struct Emulator<'a, T: InputIterator> {
     entry_point: u64,
     timeout: u64,
     count: u64,
+    nvic: Rc<RefCell<ArmV7Nvic>>,
 }
 
 impl<'a, T> Emulator<'a, T>
@@ -40,6 +41,7 @@ where
             entry_point: 0,
             timeout: 2,
             count: 0,
+            nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
         }
     }
 
@@ -129,7 +131,8 @@ where
                     )
                     .expect("Unable to add invalid r/w hook to 0xF0000000+");
                 // Add hook to handle writes to Armv7-NVIC registers
-                let nvic_rc = Rc::new(RefCell::new(ArmV7Nvic::new()));
+                let nvic_rc = self.nvic.clone(); // Create an RC clone of nvic member for the
+                                                 // closure
                 let handle_nvic_acc = move |uc: &mut Unicorn<'_, T>,
                                             acc_type: MemType,
                                             loc: u64,
@@ -137,15 +140,10 @@ where
                                             val: i64|
                       -> bool {
                     let mut nvic_borr = (*nvic_rc).borrow_mut();
-                    hooks::arm32_hooks::armv7_nvic_hooks(uc, acc_type, loc, sz, val, &mut nvic_borr)
+                    hooks::interrupt::armv7_nvic_hooks(uc, acc_type, loc, sz, val, &mut nvic_borr)
                 };
                 self.uc
                     .add_mem_hook(HookType::MEM_ALL, 0xE000E100, 0xE000ECFC, handle_nvic_acc);
-
-                // Setup an interrupt state to be moved into the two exception callbacks
-                let interrupt_state = InterruptState::new();
-                let interrupt_state_ref_return = Rc::new(RefCell::new(interrupt_state));
-                let _interrupt_state_ref_enter = Rc::clone(&interrupt_state_ref_return);
 
                 // Setup EXC_RETURN hook, use intr_hook, interrupt number 8 as documented in unicorn
                 // FAQ
@@ -156,26 +154,7 @@ where
                         return;
                     }
 
-                    // Do exc_return
-                    // PC = EXC_RETURN
-                    let exc_return = uc.reg_read(RegisterARM::PC).unwrap() as u32;
-
-                    // Check exc_return value
-                    // Only bottom four bits can change
-                    if exc_return & 0xFFFFFFF0 != 0xFFFFFFF0 {
-                        // What just happened?
-                        panic!("EXC_RETURN value invalid");
-                    }
-                    //Get mutable borrow to interrupt state
-                    let mut intr_state = (*interrupt_state_ref_return).borrow_mut();
-                    match hooks::interrupt::handle_exception_return(
-                        uc,
-                        &mut intr_state,
-                        exc_return as u64,
-                    ) {
-                        Ok(_v) => (),
-                        Err(_e) => panic!("BUG!"),
-                    };
+                    // This is an exc_return, we have to handle it.
                 };
                 self.uc
                     .add_intr_hook(sw_intr_handle)
@@ -201,12 +180,5 @@ where
         self.uc.get_data_mut()
     }
 
-    pub fn schedule_next_interrupt(&mut self) {
-        let fud = self.uc.get_data_mut();
-        // Get Next interrupt to be scheduled
-        let (next_intr_addr, next_intr_num) = fud.get_next_interrupt().unwrap();
-        let uc_hook_id =
-            self.uc
-                .add_code_hook(next_intr_addr as u64, next_intr_addr as u64, do_interrupt);
-    }
+    pub fn schedule_next_interrupt(&mut self) {}
 }
