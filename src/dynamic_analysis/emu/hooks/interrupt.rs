@@ -1,6 +1,6 @@
 use unicorn_engine::unicorn_const::uc_error;
-use unicorn_engine::{RegisterARM, Unicorn};
 pub use unicorn_engine::unicorn_const::MemType;
+use unicorn_engine::{RegisterARM, Unicorn};
 
 const SCB_ICSR: u64 = 0xE000_ED04;
 const SCB_VTOR: u64 = 0xE000_ED08;
@@ -30,7 +30,11 @@ pub struct ArmV7Nvic {
     current_irqn: Option<u32>,
     // Current pending interrupt's priority
     current_prio: i32,
-    //
+    // Active interrupt count
+    active_count: u64,
+
+    // Number of priority group bits
+    prio_group_bits: u8,
 }
 
 impl ArmV7Nvic {
@@ -45,7 +49,9 @@ impl ArmV7Nvic {
             NVIC_ExcEnabled: vec![true; ARMV7_MAX_INTERRUPTS],
             current_irqn: None,
             current_prio: 256, // start at highest possible PRIO : 256 for 8 bit priorities :
-                               // IMPLEMENTATION_DEFINED number of priority bits
+            // IMPLEMENTATION_DEFINED number of priority bits
+            active_count: 0,
+            prio_group_bits: 0,
         }
     }
 
@@ -68,138 +74,42 @@ impl ArmV7Nvic {
     pub fn write_vtor(&mut self, new_vtor: u32) {
         self.vtor = new_vtor;
     }
+
+    pub fn is_pending(&self, intno: u32) -> bool {
+        return self.NVIC_Pending[intno as usize];
+    }
+
+    pub fn which_active(&self) -> Option<(u32, i32)> {
+        match self.current_irqn {
+            Some(n) => Some((n, self.current_prio)),
+            None => None,
+        }
+    }
+
+    pub fn any_pending(&self) -> bool {
+        return self.NVIC_Pending.contains(&true);
+    }
+
+    pub fn get_vectpending(&self) -> u32 {}
+
+    pub fn get_num_pending(&self) -> u32 {
+        return self.active_count as u32;
+    }
+
+    pub fn get_current_irqn(&self) -> Option<u32> {
+        return self.current_irqn;
+    }
+
+    pub fn set_prio_group_bits(&mut self, bits: u8) {
+        self.prio_group_bits = bits;
+    }
 }
 
-
-// armv7_nvic modelling
-// register map Armv7-M B3.4.3
-#[allow(unused)]
-pub fn armv7_nvic_hooks<T>(
-    uc: &mut unicorn_engine::Unicorn<'_, T>,
-    acc_type: MemType,
-    loc: u64,
-    sz: usize,
-    val: i64,
-    nvic: &mut crate::dynamic_analysis::emu::hooks::interrupt::ArmV7Nvic,
-) -> bool
-{
-    if loc < 0xE000E100 && loc > 0xE000ECFC {
-        println!(
-            "This shouldn't have happened: armv7_nvic_hook called from acc to non-nvic address"
-        );
-        return false;
-    }
-
-    // If it is just a read, allow it
-    if (acc_type == MemType::READ) {
-        return true;
-    }
-
-    let mut new_val: u32 = val.try_into().unwrap();
-    let mut old_val_buf = vec![0u8; 4];
-    uc.mem_read(loc, &mut old_val_buf)
-        .expect("Unable to read memory for nvic handling ");
-    let mut old_val = u32::from_le_bytes(old_val_buf.try_into().unwrap());
-    if loc >= 0xE000E100 && loc <= 0xE000E13C {
-        // Interrupt set-enable RW
-        let mut i: u64 = 0;
-        while (i < 32) {
-            // only writes of 1 to this register have an effect
-            if (new_val & 1 == 1 && old_val & 1 == 0) {
-                nvic.exc_enable((i + 8 * (loc - 0xE000E100)) as u32, true);
-            }
-            new_val = new_val >> 1;
-            old_val = old_val >> 1;
-        }
-    }
-    if loc >= 0xE000E180 && loc <= 0xE000E1BC {
-        // Interrupt clear-enable RW
-        let mut i: u64 = 0;
-        while (i < 32) {
-            // only writes of 1 to this register have an effect
-            if (new_val & 1 == 1 && old_val & 1 == 0) {
-                nvic.exc_enable((i + 8 * (loc - 0xE000E100)) as u32, false);
-            }
-            new_val = new_val >> 1;
-            old_val = old_val >> 1;
-        }
-    }
-    if loc >= 0xE000E200 && loc <= 0xE000E23C {
-        // Interrupt set-pending RW
-        let mut i: u64 = 0;
-        while (i < 32) {
-            // only writes of 1 to this register have an effect
-            if (new_val & 1 == 1 && old_val & 1 == 0) {
-                nvic.exc_pend((i + 8 * (loc - 0xE000E100)) as u32, true);
-            }
-            new_val = new_val >> 1;
-            old_val = old_val >> 1;
-        }
-    }
-    if loc >= 0xE000E280 && loc <= 0xE000E2BC {
-        // Interrupt clear-pending RW
-        let mut i: u64 = 0;
-        while (i < 32) {
-            // only writes of 1 to this register have an effect
-            if (new_val & 1 == 1 && old_val & 1 == 0) {
-                nvic.exc_pend((i + 8 * (loc - 0xE000E100)) as u32, false);
-            }
-            new_val = new_val >> 1;
-            old_val = old_val >> 1;
-        }
-    }
-    if loc >= 0xE000E300 && loc <= 0xE000E33C {
-        // Interrupt active-bit RO
-        // we should never reach here
-        println!("Writing to RO NVIC registesr");
-        return false;
-    }
-    if loc >= 0xE000E340 && loc <= 0xE000E3FC {
-        // Reserved
-        return false;
-    }
-    if loc >= 0xE000E400 && loc <= 0xE000E5EC {
-        // Interrupt priority registers RW
-        let n = (loc - 0xE000E400) / 4;
-        let mut i: u64 = 0;
-        while (i < 4) {
-            if (new_val & 0xFF != old_val & 0xFF) {
-                nvic.set_prio(
-                    (4 * n + i).try_into().unwrap(),
-                    (new_val & 0xFF).try_into().unwrap(),
-                );
-            }
-            new_val = new_val >> 8;
-            old_val = old_val >> 8;
-        }
-    }
-    if loc >= 0xE000E5F0 && loc <= 0xE000ECFC {
-        // Reserved
-        return false;
-    }
-    true
-}
-
-pub fn handle_interrupt<T>(
-    uc: &mut Unicorn<'_, T>,
-) -> Result<(), uc_error> {
-    // Check if there are any pending interrupts
-    if state.pending_interrupts.is_empty() {
-        return Ok(());
-    }
-
+pub fn do_exc_entry<T>(uc: &mut Unicorn<'_, T>, irq_num: u32) -> Result<(), uc_error> {
     // Read current xPSR
     let xpsr = uc.reg_read(RegisterARM::XPSR)? as u32;
-    let current_isr = xpsr & ICSR_VECTACTIVE_MASK;
-
-    // If we're not in Thread mode (current_isr != 0), check interrupt priorities
-    if current_isr != 0 && !should_preempt(current_isr, state.pending_interrupts[0]) {
-        return Ok(());
-    }
 
     // Exception entry
-    let interrupt_number = state.pending_interrupts.remove(0);
-    state.active_interrupts.push(interrupt_number);
     let sp = uc.reg_read(RegisterARM::SP)?;
     let pc = uc.reg_read(RegisterARM::PC)?;
     let lr = uc.reg_read(RegisterARM::LR)?;
@@ -219,7 +129,7 @@ pub fn handle_interrupt<T>(
     uc.mem_write(new_sp + 28, &u32::to_le_bytes(xpsr))?;
     uc.reg_write(RegisterARM::SP, new_sp)?;
 
-    let new_xpsr = (xpsr & !ICSR_VECTACTIVE_MASK) | interrupt_number;
+    let new_xpsr = (xpsr & !ICSR_VECTACTIVE_MASK) | irq_num;
     uc.reg_write(RegisterARM::XPSR, new_xpsr as u64)?;
 
     // TODO: LR logic is in the arm tech reference manual, match it here
@@ -228,7 +138,7 @@ pub fn handle_interrupt<T>(
     uc.mem_read(SCB_VTOR, &mut buf)?;
     let vtor_value = u32::from_le_bytes(buf);
 
-    let vector_table_entry = vtor_value + (interrupt_number * 4);
+    let vector_table_entry = vtor_value + (irq_num * 4);
     let mut buf: [u8; 4] = [0, 0, 0, 0];
     uc.mem_read(vector_table_entry as u64, &mut buf)?;
     let isr_addr = u32::from_le_bytes(buf);
@@ -238,16 +148,7 @@ pub fn handle_interrupt<T>(
     Ok(())
 }
 
-// fetch_prot hook is not required see : https://github.com/unicorn-engine/unicorn/blob/dev/docs/FAQ.md#how-to-emulate-interrupts-or-ticks-with-unicorn
-// Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
-// Example in unit tests
-pub fn handle_exception_return<T>(
-    uc: &mut Unicorn<'_, T>,
-    nvic:
-
-) -> Result<(), uc_error> {
-    state.active_interrupts.pop();
-
+pub fn do_exc_return<T>(uc: &mut Unicorn<'_, T>) -> Result<(), uc_error> {
     let sp = uc.reg_read(RegisterARM::SP)?;
     // get context
     let mut buffer = [0u8; 32];

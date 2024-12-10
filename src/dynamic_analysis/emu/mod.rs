@@ -11,7 +11,7 @@ use unicorn_engine::{ArmCpuModel, Context, RegisterARM, Unicorn};
 // Hooks
 pub mod hooks;
 pub use hooks::common_hooks::{do_interrupt, CanUpdateMap};
-pub use hooks::interrupt::{ArmV7Nvic, InterruptState};
+pub use hooks::interrupt::ArmV7Nvic;
 
 // Std
 use std::cell::RefCell;
@@ -108,9 +108,10 @@ where
                         HookType::MEM_ALL,
                         0x40000000,
                         0x60000000,
-                        hooks::arm32_hooks::ARM_CORTEX_M3_PERIPHERAL_HOOK,
+                        hooks::armv7_hooks::ARM_CORTEX_M3_PERIPHERAL_HOOK,
                     )
                     .expect("Unable to add peripheral hook for ARM");
+
                 // Hook all invalid accesses till 0xF0000000
                 // after 0xF0000000, EXC_RETURN is handled separately
                 self.uc
@@ -121,6 +122,7 @@ where
                         hooks::common_hooks::mem_hook,
                     )
                     .expect("Unable to add invalid mem access hook");
+
                 // This is not needed as unicorn engine implements sw intr to intno 8 for exc_return
                 self.uc
                     .add_mem_hook(
@@ -130,6 +132,7 @@ where
                         hooks::common_hooks::mem_hook,
                     )
                     .expect("Unable to add invalid r/w hook to 0xF0000000+");
+
                 // Add hook to handle writes to Armv7-NVIC registers
                 let nvic_rc = self.nvic.clone(); // Create an RC clone of nvic member for the
                                                  // closure
@@ -140,13 +143,16 @@ where
                                             val: i64|
                       -> bool {
                     let mut nvic_borr = (*nvic_rc).borrow_mut();
-                    hooks::interrupt::armv7_nvic_hooks(uc, acc_type, loc, sz, val, &mut nvic_borr)
+                    hooks::armv7_hooks::nvic_hook(uc, acc_type, loc, sz, val, &mut nvic_borr)
                 };
                 self.uc
                     .add_mem_hook(HookType::MEM_ALL, 0xE000E100, 0xE000ECFC, handle_nvic_acc);
 
                 // Setup EXC_RETURN hook, use intr_hook, interrupt number 8 as documented in unicorn
                 // FAQ
+                // fetch_prot hook is not required see : https://github.com/unicorn-engine/unicorn/blob/dev/docs/FAQ.md#how-to-emulate-interrupts-or-ticks-with-unicorn
+                // Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
+                // Example in unit tests
                 let sw_intr_handle = move |uc: &mut unicorn_engine::Unicorn<'_, T>,
                                            intr_num: u32| {
                     if intr_num != 8 {

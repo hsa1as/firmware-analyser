@@ -1,5 +1,5 @@
 pub mod common_hooks;
 
-pub mod arm32_hooks;
+pub mod armv7_hooks;
 
 pub mod interrupt;
