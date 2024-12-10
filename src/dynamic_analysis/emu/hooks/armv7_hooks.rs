@@ -1,6 +1,7 @@
 use crate::dynamic_analysis::InputIterator;
 use std::cmp::max;
 pub use unicorn_engine::unicorn_const::MemType;
+use unicorn_engine::RegisterARM;
 
 pub enum ExcNum {
     RESET = 0x1,
@@ -282,6 +283,42 @@ pub fn scb_hook<T>(
             nvic.set_prio_group_bits(prigroup_bits);
             write_val |= (prigroup_bits as u32) << 8;
         }
+
+        // SYSRESETREQ
+        // Game over
+        //
+        if (acc_type == MemType::WRITE) {
+            let reset_req = ((val as u64) >> 2) & 0x1;
+            if (reset_req == 1) {
+                // TODO: A software requested reset is very different from a normal execution run
+                // Have to figure out a way to propagate the uc emu stop's return result, and show
+                // LibAFL that this path has caused a software requested reset
+                uc.emu_stop();
+            }
+        }
+
+        // VECTCLRACTIVE
+        if (acc_type == MemType::WRITE) {
+            let vectclractive: u64 = ((val as u64) >> 1) & 0x1;
+            if (vectclractive == 1) {
+                // The CPU MUST be in a debug state for this to be predictable behaviour
+                // We would like to catch unpredictable behaviour, so we return false here;
+                return false;
+            }
+        }
+
+        // VECTRESET
+        if (acc_type == MemType::WRITE) {
+            let bit = ((val as u64) & 0x1);
+            if (bit == 1) {
+                // The CPU MUST be in a debug state for this to be predictable behaviour
+                // We would like to catch unpredictable behaviour, so we return false here;
+                return false;
+            }
+        }
+
+        uc.mem_write(loc, &(write_val.to_le_bytes()));
+        return true;
     }
     true
 }
