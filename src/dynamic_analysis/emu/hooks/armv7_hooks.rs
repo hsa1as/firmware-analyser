@@ -316,9 +316,36 @@ pub fn scb_hook<T>(
                 return false;
             }
         }
-
         uc.mem_write(loc, &(write_val.to_le_bytes()));
         return true;
     }
+
+    // SHPR{1-3}
+    // Armv7-M Technical Reference Manual B3.2.{10-12}
+    if loc <= SHPR3 as u64 && loc >= SHPR1 as u64 {
+        // Only handle writes, zero on reset
+        // we can simply return true if it is a read;
+        if (acc_type == MemType::READ) {
+            return true;
+        }
+
+        // nvic registers for priority do not handle system exception priorities
+        // we can simply update the priorities in the nvic obkject without worrying about
+        // updating other mem-mapped registers
+
+        // Calculate offset, depending on n where SHPRn
+        let exc_offset: usize = 4 + (loc as u32 - 0xE000ED18) as usize;
+        let prio_bytes = val.to_le_bytes();
+        let mut idx: usize = 0;
+        while idx < 4 {
+            nvic.set_prio(
+                (idx + exc_offset) as u32,
+                prio_bytes[idx + exc_offset] as i16,
+            );
+            idx += 1;
+        }
+        return true;
+    }
+
     true
 }
