@@ -79,6 +79,14 @@ impl ArmV7Nvic {
         return self.NVIC_Pending[intno as usize];
     }
 
+    pub fn is_active(&self, intno: u32) -> bool {
+        return self.NVIC_ExcAct[intno as usize];
+    }
+
+    pub fn is_enabled(&self, intno: u32) -> bool {
+        return self.NVIC_ExcEnabled[intno as usize];
+    }
+
     pub fn which_active(&self) -> Option<(u32, i32)> {
         match self.current_irqn {
             Some(n) => Some((n, self.current_prio)),

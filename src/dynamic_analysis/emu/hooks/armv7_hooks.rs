@@ -347,5 +347,150 @@ pub fn scb_hook<T>(
         return true;
     }
 
+    // System Handler Control and State Register, SHCSR
+    // Armv7-M Technical Reference Manual B3.2.{10-12}
+    //
+    // Exception processing automatically updates the SHCSR fields. However, software can
+    // write to the register to add or remove the pending or active state of an exception. When
+    // updating the SHCSR, ARM recommends using a read-modify-write sequence, to avoid
+    // unintended effects on the state of the exception handlers.
+    if loc as u32 == SHCSR {
+        // If we are reading from the SHCSR, we need to ensure that the PEND bits for the
+        // system exceptions agree with the nvic
+        if (acc_type == MemType::READ) {
+            // USGFAULTENA
+            write_val = write_val | ((nvic.is_enabled(ExcNum::UsageFault as u32) as u32) << 18);
+            // BUSFAULTENA
+            write_val = write_val | ((nvic.is_enabled(ExcNum::BusFault as u32) as u32) << 17);
+            // MEMFAULTENA
+            write_val = write_val | ((nvic.is_enabled(ExcNum::MemManage as u32) as u32) << 16);
+            // SVCALLPENDED
+            write_val = write_val | ((nvic.is_pending(ExcNum::SVCall as u32) as u32) << 15);
+            // BUSFAULTPENDED
+            write_val = write_val | ((nvic.is_pending(ExcNum::BusFault as u32) as u32) << 14);
+            // MEMFAULTPENDED
+            write_val = write_val | ((nvic.is_pending(ExcNum::MemManage as u32) as u32) << 13);
+            // USGFAULTPENDED
+            write_val = write_val | ((nvic.is_pending(ExcNum::UsageFault as u32) as u32) << 12);
+            // SYSTICKACT
+            write_val = write_val | ((nvic.is_active(ExcNum::SysTick as u32) as u32) << 11);
+            // PENDSVACT
+            write_val = write_val | ((nvic.is_active(ExcNum::PendSV as u32) as u32) << 10);
+            // MONITORACT
+            write_val = write_val | ((nvic.is_active(ExcNum::DebugMonitor as u32) as u32) << 8);
+            // SVCALLACT
+            write_val = write_val | ((nvic.is_active(ExcNum::SVCall as u32) as u32) << 7);
+            // BUSFAULTACT
+            write_val = write_val | ((nvic.is_active(ExcNum::BusFault as u32) as u32) << 1);
+            // USGFAULTACT
+            write_val = write_val | ((nvic.is_active(ExcNum::UsageFault as u32) as u32) << 3);
+            // MEMFAULTACT
+            write_val = write_val | ((nvic.is_active(ExcNum::MemManage as u32) as u32) << 0);
+            let write_val_bytes = write_val.to_le_bytes();
+            uc.mem_write(loc, &write_val_bytes);
+            return true;
+        }
+        // We are writing, must be enabling/disabling some exceptions
+        // Or pending some exception
+        else {
+            // USGFAULTENA
+            if (val >> 18) & 0x1 == 0x1 {
+                nvic.exc_enable(ExcNum::UsageFault as u32, true);
+            } else {
+                nvic.exc_enable(ExcNum::UsageFault as u32, false);
+            }
+
+            // BUSFAULTENA
+            if (val >> 17) & 0x1 == 0x1 {
+                nvic.exc_enable(ExcNum::BusFault as u32, true);
+            } else {
+                nvic.exc_enable(ExcNum::BusFault as u32, false);
+            }
+
+            // MEMFAULTENA
+            if (val >> 16) & 0x1 == 0x1 {
+                nvic.exc_enable(ExcNum::MemManage as u32, true);
+            } else {
+                nvic.exc_enable(ExcNum::MemManage as u32, false);
+            }
+
+            // SVCALLPENDED
+            if (val >> 15) & 0x1 == 0x1 {
+                nvic.exc_pend(ExcNum::SVCall as u32, true);
+            } else {
+                nvic.exc_pend(ExcNum::SVCall as u32, false);
+            }
+
+            // BUSFAULTPENDED
+            if (val >> 14) & 0x1 == 0x1 {
+                nvic.exc_pend(ExcNum::BusFault as u32, true);
+            } else {
+                nvic.exc_pend(ExcNum::BusFault as u32, false);
+            }
+
+            // MEMFAULTPENDED
+            if (val >> 13) & 0x1 == 0x1 {
+                nvic.exc_pend(ExcNum::MemManage as u32, true);
+            } else {
+                nvic.exc_pend(ExcNum::MemManage as u32, false);
+            }
+
+            // USGFAULTPENDED
+            if (val >> 12) & 0x1 == 0x1 {
+                nvic.exc_pend(ExcNum::UsageFault as u32, true);
+            } else {
+                nvic.exc_pend(ExcNum::UsageFault as u32, false);
+            }
+
+            // SYSTICKACT
+            if (val >> 11) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::SysTick as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::SysTick as u32, false);
+            }
+            // PENDSVACT
+
+            if (val >> 10) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::PendSV as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::PendSV as u32, false);
+            }
+
+            // MONITORACT
+            if (val >> 8) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::DebugMonitor as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::DebugMonitor as u32, false);
+            }
+
+            // SVCALLACT
+            if (val >> 7) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::SVCall as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::SVCall as u32, false);
+            }
+
+            // BUSFAULTACT
+            if (val >> 1) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::BusFault as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::BusFault as u32, false);
+            }
+
+            // USGFAULTACT
+            if (val >> 3) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::UsageFault as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::UsageFault as u32, false);
+            }
+
+            // MEMFAULTACT
+            if (val >> 0) & 0x1 == 0x1 {
+                nvic.exc_active(ExcNum::MemManage as u32, true);
+            } else {
+                nvic.exc_active(ExcNum::MemManage as u32, false);
+            }
+        }
+    }
     true
 }
