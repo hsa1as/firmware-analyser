@@ -98,6 +98,7 @@ impl ArmV7Nvic {
         return self.NVIC_Pending.contains(&true);
     }
 
+    // Identify the next, highest priority exception that is pending
     pub fn get_vectpending(&self) -> u32 {}
 
     pub fn get_num_pending(&self) -> u32 {

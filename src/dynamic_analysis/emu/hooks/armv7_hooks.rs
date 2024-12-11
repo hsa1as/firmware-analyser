@@ -492,5 +492,6 @@ pub fn scb_hook<T>(
             }
         }
     }
+
     true
 }
