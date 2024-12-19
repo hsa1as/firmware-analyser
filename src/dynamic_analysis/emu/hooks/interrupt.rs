@@ -1,3 +1,4 @@
+#![allow(unused)]
 use unicorn_engine::unicorn_const::uc_error;
 pub use unicorn_engine::unicorn_const::MemType;
 use unicorn_engine::{RegisterARM, Unicorn};

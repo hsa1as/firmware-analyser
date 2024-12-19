@@ -1,3 +1,4 @@
+#![allow(unused)]
 // Input type
 pub mod input;
 use input::InputIterator;
@@ -90,7 +91,8 @@ where
             .context_restore(ctx)
             .expect("Unable to restore uc to initial state");
     }
-
+    // TODO: It may be possible to remove the Rc in Rc<RefCell<ArmV7Nvic>> and just have a pure RefCell
+    // Have to fix lifetime annotations in the impl block for this
     fn init_basic_hooks(&mut self) {
         self.uc
             .add_block_hook(0, 0x1FFFFFFF, hooks::common_hooks::block_hook)
@@ -134,17 +136,30 @@ where
                     .expect("Unable to add invalid r/w hook to 0xF0000000+");
 
                 // Add hook to handle writes to Armv7-NVIC registers
-                let nvic_rc = self.nvic.clone(); // Create an RC clone of nvic member for the
-                                                 // closure
+                let nvic_rc_nvic = self.nvic.clone(); // Create an RC clone
+                                                      // closure
                 let handle_nvic_acc = move |uc: &mut Unicorn<'_, T>,
                                             acc_type: MemType,
                                             loc: u64,
                                             sz: usize,
                                             val: i64|
                       -> bool {
-                    let mut nvic_borr = (*nvic_rc).borrow_mut();
+                    let mut nvic_borr = (*nvic_rc_nvic).borrow_mut();
                     hooks::armv7_hooks::nvic_hook(uc, acc_type, loc, sz, val, &mut nvic_borr)
                 };
+
+                // Add hook to handle r/w to the ARM System control block registers
+                let nvic_rc_scb = self.nvic.clone(); // Create an RC Clone
+                let handle_scb_acc = move |uc: &mut Unicorn<'_, T>,
+                                           acc_type: MemType,
+                                           loc: u64,
+                                           sz: usize,
+                                           val: i64|
+                      -> bool {
+                    let mut nvic_borr = (*nvic_rc_scb).borrow_mut();
+                    hooks::armv7_hooks::scb_hook(uc, acc_type, loc, sz, val, &mut nvic_borr)
+                };
+
                 self.uc
                     .add_mem_hook(HookType::MEM_ALL, 0xE000E100, 0xE000ECFC, handle_nvic_acc);
 
