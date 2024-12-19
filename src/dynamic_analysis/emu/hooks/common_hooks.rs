@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::io;
 
 use unicorn_engine::unicorn_const::MemType;
@@ -22,7 +23,6 @@ pub trait CanUpdateMap {
 }
 
 static mut PREV: u64 = 0;
-#[allow(unused)]
 pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     unsafe {
         let mut fud = uc.get_data_mut();
@@ -32,7 +32,6 @@ pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     }
 }
 
-#[allow(unused)]
 pub fn code_hook<T>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     println!("Code hook : Address = {loc:#08x}, Size = {sz}");
 }
@@ -42,7 +41,6 @@ pub fn insn_invalid_hook<T>(uc: &mut Unicorn<'_, T>) -> bool {
     false
 }
 
-#[allow(unused)]
 pub fn mem_hook<T>(
     uc: &mut Unicorn<'_, T>,
     mem_type: MemType,
@@ -83,10 +81,8 @@ pub fn mem_hook<T>(
     }
 }
 
-#[allow(unused)]
 pub fn do_interrupt<T>(uc: &mut Unicorn<'_, T>, loc: u64, val: u32) {}
 
-#[allow(unused)]
 fn dump_arm_registers<T>(uc: &mut Unicorn<'_, T>) {
     let registers = [
         (RegisterARM::R0, "R0"),
@@ -129,7 +125,6 @@ pub fn debug_output<T>(uc: &mut Unicorn<'_, T>) {
     }
 }
 
-#[allow(unused)]
 fn dump_arm_debug_info<T>(uc: &mut Unicorn<'_, T>) -> Result<(), io::Error> {
     // Setup terminal
     enable_raw_mode()?;

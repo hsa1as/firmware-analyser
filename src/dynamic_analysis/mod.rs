@@ -38,7 +38,6 @@ pub use libafl_targets::EDGES_MAP_DEFAULT_SIZE as MAP_SIZE;
 
 // Emulator struct
 pub mod emu;
-use emu::hooks::common_hooks::CanUpdateMap;
 use emu::input::{CombinedInput, FuzzUserData, InputIterator, InputWrapper};
 
 // Tunable constants

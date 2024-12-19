@@ -30,7 +30,7 @@ pub struct ArmV7Nvic {
     // Current pending interrupt number
     current_irqn: Option<u32>,
     // Current pending interrupt's priority
-    current_prio: i32,
+    current_prio: i16,
     // Active interrupt count
     active_count: u64,
 
@@ -54,6 +54,10 @@ impl ArmV7Nvic {
             active_count: 0,
             prio_group_bits: 0,
         }
+    }
+
+    pub fn get_prio(&self, intno: usize) -> i16 {
+        return self.NVIC_ExcPrio[intno];
     }
 
     pub fn exc_active(&mut self, intno: u32, act: bool) {
@@ -88,7 +92,7 @@ impl ArmV7Nvic {
         return self.NVIC_ExcEnabled[intno as usize];
     }
 
-    pub fn which_active(&self) -> Option<(u32, i32)> {
+    pub fn which_active(&self) -> Option<(u32, i16)> {
         match self.current_irqn {
             Some(n) => Some((n, self.current_prio)),
             None => None,
@@ -100,7 +104,19 @@ impl ArmV7Nvic {
     }
 
     // Identify the next, highest priority exception that is pending
-    pub fn get_vectpending(&self) -> u32 {}
+    pub fn get_vectpending(&self) -> u32 {
+        let mut least_prio: i16 = 256;
+        let mut curr_irqn: u32 = 0;
+        for i in 0..ARMV7_MAX_INTERRUPTS {
+            if self.NVIC_Pending[i] {
+                if (self.NVIC_ExcPrio[i] < least_prio) {
+                    least_prio = self.NVIC_ExcPrio[i];
+                    curr_irqn = i as u32;
+                }
+            }
+        }
+        return curr_irqn;
+    }
 
     pub fn get_num_pending(&self) -> u32 {
         return self.active_count as u32;
@@ -110,8 +126,31 @@ impl ArmV7Nvic {
         return self.current_irqn;
     }
 
+    pub fn set_current_irqn(&mut self, irqn: Option<u32>) {
+        match irqn {
+            Some(irqn) => {
+                self.current_irqn = Some(irqn);
+            }
+            None => {
+                self.current_irqn = None;
+            }
+        }
+    }
+
+    pub fn set_current_prio(&mut self, prio: i16) {
+        self.current_prio = prio;
+    }
+
     pub fn set_prio_group_bits(&mut self, bits: u8) {
         self.prio_group_bits = bits;
+    }
+
+    pub fn set_active_count(&mut self, count: u64) {
+        self.active_count = count;
+    }
+
+    pub fn get_active_count(&self) -> u64 {
+        return self.active_count;
     }
 }
 

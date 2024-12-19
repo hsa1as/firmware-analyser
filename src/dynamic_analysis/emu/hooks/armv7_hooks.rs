@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 use crate::dynamic_analysis::InputIterator;
 use std::cmp::max;
 pub use unicorn_engine::unicorn_const::MemType;

@@ -12,7 +12,7 @@ use unicorn_engine::{ArmCpuModel, Context, RegisterARM, Unicorn};
 // Hooks
 pub mod hooks;
 pub use hooks::common_hooks::{do_interrupt, CanUpdateMap};
-pub use hooks::interrupt::ArmV7Nvic;
+pub use hooks::interrupt::{do_exc_entry, do_exc_return, ArmV7Nvic};
 
 // Std
 use std::cell::RefCell;
@@ -168,14 +168,34 @@ where
                 // fetch_prot hook is not required see : https://github.com/unicorn-engine/unicorn/blob/dev/docs/FAQ.md#how-to-emulate-interrupts-or-ticks-with-unicorn
                 // Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
                 // Example in unit tests
+                let nvic_exc_ret = self.nvic.clone(); // Create an RC Clone
                 let sw_intr_handle = move |uc: &mut unicorn_engine::Unicorn<'_, T>,
                                            intr_num: u32| {
                     if intr_num != 8 {
                         // This is a normal software interrupt, do not do an exc_return
                         return;
                     }
-
+                    let nvic_borr = &mut *(*nvic_exc_ret).borrow_mut();
                     // This is an exc_return, we have to handle it.
+                    // Since this is an exc_return, we first deal with changes to the nvic structure
+                    // remove the current irqn from the active list
+                    let current_irqn = nvic_borr.get_current_irqn();
+                    match current_irqn {
+                        Some(irqn) => {
+                            nvic_borr.exc_active(irqn, false);
+                            nvic_borr.set_current_irqn(None);
+                            // TODO: Change hardcoded MAX_PRIORITY_LEVEL here, it is 256 for 8
+                            // priority bits
+                            nvic_borr.set_current_prio(256);
+                            // Set active count
+                            nvic_borr.set_active_count(nvic_borr.get_active_count() - 1);
+                            do_exc_return(uc);
+                        }
+                        None => {
+                            // If this happens, it could be a bug
+                            panic!("No current irqn set for exc_return");
+                        }
+                    }
                 };
                 self.uc
                     .add_intr_hook(sw_intr_handle)
@@ -202,4 +222,19 @@ where
     }
 
     pub fn schedule_next_interrupt(&mut self) {}
+
+    pub fn do_pending_interrupt(&mut self) {
+        let mut nvic_borr = &mut *self.nvic.borrow_mut();
+        let irqn = nvic_borr.get_vectpending();
+        if irqn == 0 {
+            return;
+        }
+        let prio = nvic_borr.get_prio(irqn as usize);
+        nvic_borr.exc_active(irqn, true);
+        nvic_borr.exc_pend(irqn, false);
+        nvic_borr.set_current_irqn(Some(irqn));
+        nvic_borr.set_current_prio(prio);
+        nvic_borr.set_active_count(nvic_borr.get_active_count() + 1);
+        do_exc_entry(&mut self.uc, irqn);
+    }
 }
