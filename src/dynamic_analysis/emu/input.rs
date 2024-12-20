@@ -179,6 +179,32 @@ pub struct InterruptModifyMutator {
 }
 pub struct InterruptRemoveMutator;
 
+impl InterruptAddMutator {
+    pub fn new(code_lower: u32, code_upper: u32, max_intr_num: NonZeroUsize) -> Self {
+        Self {
+            code_lower,
+            code_upper,
+            max_intr_num,
+        }
+    }
+}
+
+impl InterruptModifyMutator {
+    pub fn new(code_lower: u32, code_upper: u32, max_intr_num: NonZeroUsize) -> Self {
+        Self {
+            code_lower,
+            code_upper,
+            max_intr_num,
+        }
+    }
+}
+
+impl InterruptRemoveMutator {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 impl Named for InterruptAddMutator {
     fn name(&self) -> &Cow<'static, str> {
         &Cow::Borrowed("InterruptAddMutator")
@@ -239,7 +265,10 @@ where
         input: &mut CombinedInput,
     ) -> Result<MutationResult, libAFLError> {
         // Select an index to mutate
-        let idx = state.rand_mut().choose(&mut input.intr_addrs).unwrap();
+        let idx = match state.rand_mut().choose(&mut input.intr_addrs) {
+            Some(val) => val,
+            None => return Ok(MutationResult::Skipped),
+        };
         let rand_obj = state.rand_mut();
         // Get the new thing
         let new_addr = rand_obj.between(self.code_lower as usize, self.code_upper as usize) as u32;

@@ -6,6 +6,7 @@ use core::ptr::NonNull;
 use std::error::Error;
 use std::path::PathBuf;
 
+use libafl::mutators::mapped_havoc_mutations;
 // Unicorn imports
 use unicorn_engine::unicorn_const::{Arch, Mode};
 
@@ -31,14 +32,17 @@ use libafl_bolts::{
     current_nanos,
     rands::StdRand,
     shmem::{unix_shmem, ShMemProvider},
-    tuples::tuple_list,
+    tuples::{tuple_list, Merge, Prepend},
     AsSliceMut,
 };
 pub use libafl_targets::EDGES_MAP_DEFAULT_SIZE as MAP_SIZE;
 
 // Emulator struct
 pub mod emu;
-use emu::input::{CombinedInput, FuzzUserData, InputIterator, InputWrapper};
+use emu::input::{
+    CombinedInput, FuzzUserData, FuzzingInputGenerator, InputIterator, InputWrapper,
+    InterruptAddMutator, InterruptModifyMutator, InterruptRemoveMutator,
+};
 
 // Tunable constants
 pub const MAX_NUM_INTERRUPTS: u32 = 25;
@@ -102,8 +106,8 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
         &mut objective,
     )
     .unwrap();
-    let scheduler = IndexesLenTimeMinimizerScheduler::new(&edges_observer, QueueScheduler::new());
-    // A fuzzer with feedbacks and a corpus scheduler
+    let scheduler = QueueScheduler::new(); //IndexesLenTimeMinimizerScheduler::new(&edges_observer, QueueScheduler::new());
+                                           // A fuzzer with feedbacks and a corpus scheduler
     let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
     let mut executor = InProcessForkExecutor::new(
@@ -118,7 +122,12 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
     .expect("Failed to create the executor");
 
     // Generator of printable bytearrays of max size 32
-    let mut generator = RandBytesGenerator::new(NonZeroUsize::new(4).unwrap());
+    let mut generator = FuzzingInputGenerator::new(
+        NonZeroUsize::new(0x1000).unwrap(),
+        0x1000,
+        0x2000,
+        MAX_NUM_INTERRUPTS,
+    );
 
     // Generate 8 initial inputs
     state
@@ -126,7 +135,21 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
         .expect("Failed to generate the initial corpus");
 
     // Setup a mutational stage with a basic bytes mutator
-    let mutator = StdScheduledMutator::new(havoc_mutations());
+    let mapped_mutators = mapped_havoc_mutations(CombinedInput::bytes_mut, CombinedInput::bytes);
+    let mutators = tuple_list!()
+        .merge(mapped_mutators)
+        .prepend(InterruptAddMutator::new(
+            0x0,
+            0x20000000,
+            NonZeroUsize::new(MAX_NUM_INTERRUPTS as usize).unwrap(),
+        ))
+        .prepend(InterruptModifyMutator::new(
+            0x0,
+            0x20000000,
+            NonZeroUsize::new(MAX_NUM_INTERRUPTS as usize).unwrap(),
+        ))
+        .prepend(InterruptRemoveMutator::new());
+    let mutator = StdScheduledMutator::new(mutators);
     let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
     fuzzer

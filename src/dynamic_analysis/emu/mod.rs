@@ -41,7 +41,7 @@ where
             arch,
             mode,
             entry_point: 0,
-            timeout: 2,
+            timeout: 1000,
             count: 0,
             nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
             hook_list: Rc::new(RefCell::new(Vec::new())),
@@ -199,11 +199,16 @@ where
                             do_exc_return(uc);
                             // remove all hooks from the active hook list;
                             while !hook_list_borr.is_empty() {
+                                // Follow FAQ of unicorn engine:
+                                // https://github.com/unicorn-engine/unicorn/blob/master/docs/FAQ.md#editing-an-instruction-doesnt-take-effecthooks-added-during-emulation-are-not-called
                                 let hook_id = hook_list_borr.pop().unwrap();
                                 // remove the hook
                                 uc.remove_hook(hook_id.0);
                                 // Remove the TB Cache for the address
                                 uc.ctl_remove_cache(hook_id.1, hook_id.1 + 1);
+                                // Set PC again
+                                let pc = uc.pc_read().unwrap();
+                                uc.set_pc(pc);
                             }
                         }
                         None => {
@@ -211,6 +216,8 @@ where
                             panic!("No current irqn set for exc_return");
                         }
                     }
+                    // We could tail-chain some other pending exceptions
+                    nvic_borr.maybe_activate_interrupt(uc);
                 };
                 self.uc
                     .add_intr_hook(sw_intr_handle)
@@ -227,7 +234,7 @@ where
         self.uc.emu_start(
             self.entry_point,
             0x1FFFFFFF,
-            self.timeout * SECOND_SCALE,
+            self.timeout,
             self.count as usize,
         )
     }
@@ -247,6 +254,8 @@ where
         let active_hook_list = self.hook_list.clone();
         let hook_id_rc = Rc::new(RefCell::new(None));
         let hook_id_rc_clone = hook_id_rc.clone();
+
+        // Closure for the hook
         let mut intr_harness = move |uc: &mut Unicorn<'_, T>, addr: u64, sz: u32| {
             let mut nvic_borr = &mut *nvic_intr.borrow_mut();
             let mut hook_list_mut = &mut *active_hook_list.borrow_mut();
@@ -256,11 +265,14 @@ where
             // We push the hook id to the hook list regardless of whether the interrupt was activated
             hook_list_mut.push(hook_id);
         };
+
+        // Get hook ID
         let hook_id = self
             .uc
             .add_code_hook(addr as u64, addr as u64, intr_harness)
             .unwrap();
-        *hook_id_rc.borrow_mut() = Some((hook_id, addr as u64));
+
         // Set hook id in the RefCell
+        *hook_id_rc.borrow_mut() = Some((hook_id, addr as u64));
     }
 }
