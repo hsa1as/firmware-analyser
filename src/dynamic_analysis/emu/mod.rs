@@ -27,7 +27,7 @@ pub struct Emulator<'a, T: InputIterator> {
     timeout: u64,
     count: u64,
     nvic: Rc<RefCell<ArmV7Nvic>>,
-    hook_list: Vec<UcHookId>,
+    hook_list: Rc<RefCell<Vec<(UcHookId, u64)>>>,
 }
 
 impl<'a, T> Emulator<'a, T>
@@ -44,7 +44,7 @@ where
             timeout: 2,
             count: 0,
             nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
-            hook_list: Vec::new(),
+            hook_list: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -96,6 +96,9 @@ where
     // TODO: It may be possible to remove the Rc in Rc<RefCell<ArmV7Nvic>> and just have a pure RefCell
     // Have to fix lifetime annotations in the impl block for this
     fn init_basic_hooks(&mut self) {
+        // We capture a lot of Rc clones in some closures for hooks here
+        // But this is okay, and won't leak memory as all these hooks are static, and
+        // are initialised only once and never removed. This could be a problem for interrupt hooks
         self.uc
             .add_block_hook(0, 0x1FFFFFFF, hooks::common_hooks::block_hook)
             .expect("Unable to add block hook");
@@ -171,6 +174,7 @@ where
                 // Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
                 // Example in unit tests
                 let nvic_exc_ret = self.nvic.clone(); // Create an RC Clone
+                let hook_list_ret = self.hook_list.clone();
                 let sw_intr_handle = move |uc: &mut unicorn_engine::Unicorn<'_, T>,
                                            intr_num: u32| {
                     if intr_num != 8 {
@@ -182,6 +186,7 @@ where
                     // Since this is an exc_return, we first deal with changes to the nvic structure
                     // remove the current irqn from the active list
                     let current_irqn = nvic_borr.get_current_irqn();
+                    let mut hook_list_borr = hook_list_ret.borrow_mut();
                     match current_irqn {
                         Some(irqn) => {
                             nvic_borr.exc_active(irqn, false);
@@ -192,6 +197,14 @@ where
                             // Set active count
                             nvic_borr.set_active_count(nvic_borr.get_active_count() - 1);
                             do_exc_return(uc);
+                            // remove all hooks from the active hook list;
+                            while !hook_list_borr.is_empty() {
+                                let hook_id = hook_list_borr.pop().unwrap();
+                                // remove the hook
+                                uc.remove_hook(hook_id.0);
+                                // Remove the TB Cache for the address
+                                uc.ctl_remove_cache(hook_id.1, hook_id.1 + 1);
+                            }
                         }
                         None => {
                             // If this happens, it could be a bug
@@ -231,29 +244,23 @@ where
         // steps for activation
         //
         let nvic_intr = self.nvic.clone();
+        let active_hook_list = self.hook_list.clone();
+        let hook_id_rc = Rc::new(RefCell::new(None));
+        let hook_id_rc_clone = hook_id_rc.clone();
         let mut intr_harness = move |uc: &mut Unicorn<'_, T>, addr: u64, sz: u32| {
             let mut nvic_borr = &mut *nvic_intr.borrow_mut();
+            let mut hook_list_mut = &mut *active_hook_list.borrow_mut();
             nvic_borr.exc_pend(irqn, true);
-            nvic_borr.maybe_activate_interrupt(uc);
+            let active = nvic_borr.maybe_activate_interrupt(uc);
+            let hook_id = hook_id_rc_clone.borrow().unwrap();
+            // We push the hook id to the hook list regardless of whether the interrupt was activated
+            hook_list_mut.push(hook_id);
         };
         let hook_id = self
             .uc
-            .add_code_hook(addr as u64, addr as u64, intr_harness);
+            .add_code_hook(addr as u64, addr as u64, intr_harness)
+            .unwrap();
+        *hook_id_rc.borrow_mut() = Some((hook_id, addr as u64));
         // Set hook id in the RefCell
-    }
-
-    pub fn do_pending_interrupt(&mut self) {
-        let mut nvic_borr = &mut *self.nvic.borrow_mut();
-        let irqn = nvic_borr.get_vectpending();
-        if irqn == 0 {
-            return;
-        }
-        let prio = nvic_borr.get_prio(irqn as usize);
-        nvic_borr.exc_active(irqn, true);
-        nvic_borr.exc_pend(irqn, false);
-        nvic_borr.set_current_irqn(Some(irqn));
-        nvic_borr.set_current_prio(prio);
-        nvic_borr.set_active_count(nvic_borr.get_active_count() + 1);
-        do_exc_entry(&mut self.uc, irqn);
     }
 }

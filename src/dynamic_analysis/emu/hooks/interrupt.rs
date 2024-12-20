@@ -1,7 +1,7 @@
 #![allow(unused)]
-use unicorn_engine::unicorn_const::uc_error;
 pub use unicorn_engine::unicorn_const::MemType;
-use unicorn_engine::{RegisterARM, Unicorn};
+use unicorn_engine::{ffi::UcHook, unicorn_const::uc_error};
+use unicorn_engine::{RegisterARM, UcHookId, Unicorn};
 
 const SCB_ICSR: u64 = 0xE000_ED04;
 const SCB_VTOR: u64 = 0xE000_ED08;
@@ -153,22 +153,29 @@ impl ArmV7Nvic {
         return self.active_count;
     }
 
-    pub fn maybe_activate_interrupt<T>(&mut self, uc: &mut Unicorn<'_, T>) {
+    pub fn maybe_activate_interrupt<T>(&mut self, uc: &mut Unicorn<'_, T>) -> bool {
         let mut irqn: u32 = 0;
         let mut prio: i16 = 256;
         let mut active_count: u64 = 0;
+        let mut found: bool = false;
         for i in 0..ARMV7_MAX_INTERRUPTS {
             if self.NVIC_Pending[i] {
                 if self.NVIC_ExcPrio[i] < prio {
                     prio = self.NVIC_ExcPrio[i];
                     irqn = i as u32;
+                    found = true;
                 }
                 active_count += 1;
             }
         }
-        self.set_current_irqn(Some(irqn));
-        self.set_current_prio(prio);
-        self.set_active_count(active_count);
+        if (found) {
+            self.set_current_irqn(Some(irqn));
+            self.set_current_prio(prio);
+            self.set_active_count(active_count);
+            do_exc_entry(uc, irqn);
+            return true;
+        }
+        false
     }
 }
 
