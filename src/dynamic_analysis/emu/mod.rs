@@ -7,7 +7,7 @@ use input::InputIterator;
 use unicorn_engine::unicorn_const::{
     uc_error, Arch, HookType, MemType, Mode, Permission, SECOND_SCALE,
 };
-use unicorn_engine::{ArmCpuModel, Context, RegisterARM, Unicorn};
+use unicorn_engine::{ArmCpuModel, Context, RegisterARM, UcHookId, Unicorn};
 
 // Hooks
 pub mod hooks;
@@ -15,7 +15,7 @@ pub use hooks::common_hooks::{do_interrupt, CanUpdateMap};
 pub use hooks::interrupt::{do_exc_entry, do_exc_return, ArmV7Nvic};
 
 // Std
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 #[allow(dead_code)]
@@ -27,6 +27,7 @@ pub struct Emulator<'a, T: InputIterator> {
     timeout: u64,
     count: u64,
     nvic: Rc<RefCell<ArmV7Nvic>>,
+    hook_list: Vec<UcHookId>,
 }
 
 impl<'a, T> Emulator<'a, T>
@@ -43,6 +44,7 @@ where
             timeout: 2,
             count: 0,
             nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
+            hook_list: Vec::new(),
         }
     }
 
@@ -222,6 +224,23 @@ where
     }
 
     pub fn schedule_next_interrupt(&mut self) {}
+
+    pub fn schedule_one_interrupt(&mut self, addr: u32, irqn: u32) {
+        // We will schedule an interrupt to be pended at addr, with intno: irqn
+        // Next, we will check if this interrupt can be activated. If it can, do the
+        // steps for activation
+        //
+        let nvic_intr = self.nvic.clone();
+        let mut intr_harness = move |uc: &mut Unicorn<'_, T>, addr: u64, sz: u32| {
+            let mut nvic_borr = &mut *nvic_intr.borrow_mut();
+            nvic_borr.exc_pend(irqn, true);
+            nvic_borr.maybe_activate_interrupt(uc);
+        };
+        let hook_id = self
+            .uc
+            .add_code_hook(addr as u64, addr as u64, intr_harness);
+        // Set hook id in the RefCell
+    }
 
     pub fn do_pending_interrupt(&mut self) {
         let mut nvic_borr = &mut *self.nvic.borrow_mut();

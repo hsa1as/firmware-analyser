@@ -152,6 +152,24 @@ impl ArmV7Nvic {
     pub fn get_active_count(&self) -> u64 {
         return self.active_count;
     }
+
+    pub fn maybe_activate_interrupt<T>(&mut self, uc: &mut Unicorn<'_, T>) {
+        let mut irqn: u32 = 0;
+        let mut prio: i16 = 256;
+        let mut active_count: u64 = 0;
+        for i in 0..ARMV7_MAX_INTERRUPTS {
+            if self.NVIC_Pending[i] {
+                if self.NVIC_ExcPrio[i] < prio {
+                    prio = self.NVIC_ExcPrio[i];
+                    irqn = i as u32;
+                }
+                active_count += 1;
+            }
+        }
+        self.set_current_irqn(Some(irqn));
+        self.set_current_prio(prio);
+        self.set_active_count(active_count);
+    }
 }
 
 pub fn do_exc_entry<T>(uc: &mut Unicorn<'_, T>, irq_num: u32) -> Result<(), uc_error> {
