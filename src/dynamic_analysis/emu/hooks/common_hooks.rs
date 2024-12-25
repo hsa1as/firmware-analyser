@@ -30,6 +30,8 @@ pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
         fud.update_map(hash);
         PREV = loc >> 1;
     }
+    #[cfg(feature = "debug")]
+    println!("Block hook : Address = {loc:#08x}, Size = {sz}");
 }
 
 pub fn code_hook<T>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {

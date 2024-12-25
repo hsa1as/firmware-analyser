@@ -54,6 +54,7 @@ impl CombinedInput {
     }
 }
 
+#[derive(Debug)]
 pub struct InputWrapper<'a> {
     bytes: &'a Vec<u8>,
     idx_bytes: usize,

@@ -36,9 +36,13 @@ where
         let word = data.get_next_word();
         uc.mem_write(loc, &word)
             .expect("Couldn't write AFL input to memory");
-        //println!("Hit peripheral hook with address = {loc} and size = {sz}");
         let word_as_u32 = u32::from_le_bytes(word);
-        //println!("Writing word = {word_as_u32}");
+
+        #[cfg(feature = "debug")]
+        {
+            println!("Writing word = {word_as_u32}");
+            println!("Hit peripheral hook with address = {loc} and size = {sz}");
+        }
     }
     true
 }
@@ -81,6 +85,7 @@ pub fn nvic_hook<T>(
             }
             new_val = new_val >> 1;
             old_val = old_val >> 1;
+            i = i + 1;
         }
     }
     if loc >= 0xE000E180 && loc <= 0xE000E1BC {
@@ -93,6 +98,7 @@ pub fn nvic_hook<T>(
             }
             new_val = new_val >> 1;
             old_val = old_val >> 1;
+            i = i + 1;
         }
     }
     if loc >= 0xE000E200 && loc <= 0xE000E23C {
@@ -105,6 +111,7 @@ pub fn nvic_hook<T>(
             }
             new_val = new_val >> 1;
             old_val = old_val >> 1;
+            i = i + 1;
         }
     }
     if loc >= 0xE000E280 && loc <= 0xE000E2BC {
@@ -117,6 +124,7 @@ pub fn nvic_hook<T>(
             }
             new_val = new_val >> 1;
             old_val = old_val >> 1;
+            i = i + 1;
         }
     }
     if loc >= 0xE000E300 && loc <= 0xE000E33C {
@@ -142,6 +150,7 @@ pub fn nvic_hook<T>(
             }
             new_val = new_val >> 8;
             old_val = old_val >> 8;
+            i = i + 1;
         }
     }
     if loc >= 0xE000E5F0 && loc <= 0xE000ECFC {

@@ -19,14 +19,14 @@ use libafl::{
     feedback_or, feedback_or_fast,
     feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback},
     fuzzer::{Fuzzer, StdFuzzer},
-    generators::RandBytesGenerator,
+    generators::{Generator, RandBytesGenerator},
     inputs::BytesInput,
     monitors::tui::TuiMonitor,
     mutators::{havoc_mutations, scheduled::StdScheduledMutator},
     observers::{CanTrack, ConstMapObserver, HitcountsMapObserver, TimeObserver},
     schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
     stages::mutational::StdMutationalStage,
-    state::StdState,
+    state::{HasRand, NopState, StdState},
 };
 use libafl_bolts::{
     current_nanos,
@@ -48,12 +48,37 @@ use emu::input::{
 pub const MAX_NUM_INTERRUPTS: u32 = 25;
 
 #[allow(non_snake_case, unused_variables, unused_mut)]
-pub fn emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
-    println!("Not implemented");
+pub fn test_emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
+    // Create edge map
+    let mut shmem_provider = unix_shmem::UnixShMemProvider::new().unwrap();
+    let mut EDGES = shmem_provider.new_shmem(MAP_SIZE).unwrap();
+    let EDGES_PTR = EDGES.as_slice_mut();
+    let EDGES_PTR_FOR_MAP = NonNull::<[u8; MAP_SIZE]>::new(
+        <&mut [u8; MAP_SIZE]>::try_from(EDGES_PTR).expect("Error while converting Map to array"),
+    )
+    .unwrap();
+    let EDGES_MAP = EDGES.as_slice_mut();
+
+    let mut combined_input_gen = FuzzingInputGenerator::new(
+        NonZeroUsize::new(0x100).unwrap(),
+        0x0,
+        0x20000000,
+        MAX_NUM_INTERRUPTS,
+    );
+    let mut nop_state = NopState::<CombinedInput>::new();
+    let mut combined_input = combined_input_gen.generate(&mut nop_state).unwrap();
+    println!("Generated input: {:?}", combined_input);
+    let mut ud = InputWrapper::from(&combined_input);
+    println!("InputWrapper: {:?}", ud);
+    let mut fud = FuzzUserData::new(ud, EDGES_MAP, MAP_SIZE as u64);
+    let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, fud);
+    emu.setup(&mut fileinfo.contents);
+    let emu_result = emu.start_emu();
+    println!("Emulation result: {:?}", emu_result);
     Ok(())
 }
 
-#[allow(non_snake_case, unused_variables, unused_mut)]
+#[allow(non_snake_case, unused)]
 pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> where
 {
     // Shmem provider
@@ -163,7 +188,7 @@ pub fn run(fileinfo: FileInfo, fuzz: bool) -> Result<(), Box<dyn Error>> {
     if fuzz {
         start_fuzz_singlecore(fileinfo).expect("Fuzzing failed");
     } else {
-        emulate(fileinfo).expect("Emulation failed");
+        test_emulate(fileinfo).expect("Emulation failed");
     }
     Ok(())
 }

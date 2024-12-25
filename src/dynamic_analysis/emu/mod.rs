@@ -41,7 +41,7 @@ where
             arch,
             mode,
             entry_point: 0,
-            timeout: 1000,
+            timeout: 10000,
             count: 0,
             nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
             hook_list: Rc::new(RefCell::new(Vec::new())),
@@ -96,6 +96,12 @@ where
     // TODO: It may be possible to remove the Rc in Rc<RefCell<ArmV7Nvic>> and just have a pure RefCell
     // Have to fix lifetime annotations in the impl block for this
     fn init_basic_hooks(&mut self) {
+        // Code hook for debug
+        //#[cfg(feature = "debug")]
+        //self.uc
+        //    .add_code_hook(0, 0x1FFFFFFF, hooks::common_hooks::code_hook)
+        //    .expect("Unable to add code hook");
+
         // We capture a lot of Rc clones in some closures for hooks here
         // But this is okay, and won't leak memory as all these hooks are static, and
         // are initialised only once and never removed. This could be a problem for interrupt hooks
