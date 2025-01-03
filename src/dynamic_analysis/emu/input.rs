@@ -71,6 +71,10 @@ impl<'a> InputWrapper<'a> {
             idx_intrs: 0,
         }
     }
+
+    pub fn get_intr_addrs(&self) -> &'a Vec<(u32, u32)> {
+        &self.intr_addrs
+    }
 }
 
 impl<'a> From<&'a CombinedInput> for InputWrapper<'a> {
@@ -150,8 +154,15 @@ where
         // TODO: is it okay to use the same rand object to generate random bytes
         // for unrelated parts of the input?
         for elem in intr_addrs_vec.iter_mut() {
-            (*elem).0 = rand_obj.between(self.code_lower as usize, self.code_upper as usize) as u32;
+            (*elem).1 = rand_obj.between(self.code_lower as usize, self.code_upper as usize) as u32;
             (*elem).0 = rand_obj.below(self.max_intr_num) as u32;
+        }
+
+        #[cfg(feature = "debug")]
+        {
+            println!("Generator for FuzzingInputGenerator");
+            println!("Generated input: {:?}", bytes_input);
+            println!("Generated interrupts: {:?}", intr_addrs_vec);
         }
 
         Ok(CombinedInput {
@@ -308,7 +319,6 @@ pub struct FuzzUserData<'a, CM> {
     input_object: InputWrapper<'a>,
     cov_map: CM,
     cov_size: u64,
-    last_intr_addr: Option<UcHookId>,
 }
 
 impl<'a> CanUpdateMap for FuzzUserData<'a, &'a mut [u8]> {
@@ -335,7 +345,10 @@ impl<'a, CM> FuzzUserData<'a, CM> {
             input_object,
             cov_map,
             cov_size,
-            last_intr_addr: None,
         }
+    }
+
+    pub fn get_input_wrapper(&self) -> &InputWrapper<'a> {
+        &self.input_object
     }
 }

@@ -17,6 +17,21 @@ pub use hooks::interrupt::{do_exc_entry, do_exc_return, ArmV7Nvic};
 // Std
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone)]
+enum StopRequested {
+    Interrupt,
+    Crash,
+    None,
+}
+
+#[derive(Debug)]
+pub enum EmuExit {
+    Timeout,
+    Crash,
+    Ok,
+}
 
 #[allow(dead_code)]
 pub struct Emulator<'a, T: InputIterator> {
@@ -27,7 +42,8 @@ pub struct Emulator<'a, T: InputIterator> {
     timeout: u64,
     count: u64,
     nvic: Rc<RefCell<ArmV7Nvic>>,
-    hook_list: Rc<RefCell<Vec<(UcHookId, u64)>>>,
+    stop_requested: Rc<RefCell<StopRequested>>,
+    last_hook: Option<(UcHookId, u32)>,
 }
 
 impl<'a, T> Emulator<'a, T>
@@ -44,7 +60,8 @@ where
             timeout: 10000,
             count: 0,
             nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
-            hook_list: Rc::new(RefCell::new(Vec::new())),
+            stop_requested: Rc::new(RefCell::new(StopRequested::None)),
+            last_hook: None,
         }
     }
 
@@ -180,19 +197,30 @@ where
                 // Unicorn exposes software exception ( add_intr_hook ) with number 8 for handling exc_return
                 // Example in unit tests
                 let nvic_exc_ret = self.nvic.clone(); // Create an RC Clone
-                let hook_list_ret = self.hook_list.clone();
                 let sw_intr_handle = move |uc: &mut unicorn_engine::Unicorn<'_, T>,
                                            intr_num: u32| {
+                    #[cfg(feature = "debug")]
+                    {
+                        println!("Handling interrupt number: {}", intr_num);
+                    }
+
                     if intr_num != 8 {
                         // This is a normal software interrupt, do not do an exc_return
                         return;
                     }
+
                     let nvic_borr = &mut *(*nvic_exc_ret).borrow_mut();
+
+                    #[cfg(feature = "debug")]
+                    {
+                        println!("Handling EXC_RETURN");
+                        println!("Current state of nvic: {:#?}", *nvic_borr);
+                    }
+
                     // This is an exc_return, we have to handle it.
                     // Since this is an exc_return, we first deal with changes to the nvic structure
                     // remove the current irqn from the active list
                     let current_irqn = nvic_borr.get_current_irqn();
-                    let mut hook_list_borr = hook_list_ret.borrow_mut();
                     match current_irqn {
                         Some(irqn) => {
                             nvic_borr.exc_active(irqn, false);
@@ -203,18 +231,11 @@ where
                             // Set active count
                             nvic_borr.set_active_count(nvic_borr.get_active_count() - 1);
                             do_exc_return(uc);
-                            // remove all hooks from the active hook list;
-                            while !hook_list_borr.is_empty() {
-                                // Follow FAQ of unicorn engine:
-                                // https://github.com/unicorn-engine/unicorn/blob/master/docs/FAQ.md#editing-an-instruction-doesnt-take-effecthooks-added-during-emulation-are-not-called
-                                let hook_id = hook_list_borr.pop().unwrap();
-                                // remove the hook
-                                uc.remove_hook(hook_id.0);
-                                // Remove the TB Cache for the address
-                                uc.ctl_remove_cache(hook_id.1, hook_id.1 + 1);
-                                // Set PC again
-                                let pc = uc.pc_read().unwrap();
-                                uc.set_pc(pc);
+
+                            #[cfg(feature = "debug")]
+                            {
+                                println!("Finished EXC_RETURN for irqn: {}", irqn);
+                                println!("After exc_return: {:#?}", *nvic_borr);
                             }
                         }
                         None => {
@@ -224,61 +245,162 @@ where
                     }
                     // We could tail-chain some other pending exceptions
                     nvic_borr.maybe_activate_interrupt(uc);
+
+                    // Add a hook to pend the next interrupt
                 };
                 self.uc
                     .add_intr_hook(sw_intr_handle)
                     .expect("Unable to add interrupt hook to handle EXC_RETURN for ARM");
-
-                // Schedule the first interrupt to arrive
-                self.schedule_next_interrupt();
             }
             _ => unimplemented!(),
         }
     }
 
-    pub fn start_emu(&mut self) -> Result<(), uc_error> {
-        self.uc.emu_start(
-            self.entry_point,
-            0x1FFFFFFF,
-            self.timeout,
-            self.count as usize,
-        )
+    pub fn start_emu(&mut self) -> Result<EmuExit, uc_error> {
+        // Schedule first interrupt to arrive
+        self.schedule_next_interrupt();
+
+        // Setup timers
+        let mut now = Instant::now();
+        let mut rem = self.timeout;
+
+        // First step emulation
+        let mut res = self
+            .uc
+            .emu_start(self.entry_point, 0x1FFFFFFF, rem, self.count as usize);
+
+        let elapsed = now.elapsed().as_micros() as u64;
+        rem = match rem.checked_sub(elapsed) {
+            Some(v) => v,
+            None => return Ok(EmuExit::Timeout),
+        };
+
+        // Delete last intr hook if it exists
+        match self.last_hook {
+            Some(v) => {
+                self.uc.remove_hook(v.0);
+                self.last_hook = None;
+                self.uc.ctl_remove_cache(v.1 as u64, v.1 as u64 + 1);
+                self.uc.set_pc(self.uc.pc_read().unwrap());
+            }
+            None => (),
+        }
+        let mut temp = self.stop_requested.borrow().clone();
+        while let StopRequested::Interrupt = temp {
+            // Change stop_requested status
+            {
+                let mut x = self.stop_requested.borrow_mut();
+                *x = StopRequested::None;
+            }
+
+            // Check emulation run exit status
+            match res {
+                Ok(_) => (),
+                Err(e) => return Err(e),
+            };
+
+            // Delete last intr hook if it exists
+            match self.last_hook {
+                Some(v) => {
+                    self.uc.remove_hook(v.0);
+                    self.last_hook = None;
+                    self.uc.ctl_remove_cache(v.1 as u64, v.1 as u64 + 1);
+                    self.uc.set_pc(self.uc.pc_read().unwrap());
+                }
+                None => (),
+            }
+
+            // Schedule next interrupt
+            self.schedule_next_interrupt();
+
+            // Restart emulation
+            now = Instant::now();
+            res = self
+                .uc
+                .emu_start(self.entry_point, 0x1FFFFFFF, rem, self.count as usize);
+            let elapsed = now.elapsed().as_micros() as u64;
+            rem = match rem.checked_sub(elapsed) {
+                Some(v) => v,
+                None => return Ok(EmuExit::Timeout),
+            };
+
+            // Check exit status
+            temp = self.stop_requested.borrow().clone();
+        }
+        match res {
+            Ok(_) => (),
+            Err(e) => return Err(e),
+        };
+        match temp {
+            StopRequested::Crash => Ok(EmuExit::Crash),
+            StopRequested::None => Ok(EmuExit::Ok),
+            StopRequested::Interrupt => panic!("Interrupt requested after emulation exit"),
+        }
     }
 
     pub fn get_mut_data(&mut self) -> &mut T {
         self.uc.get_data_mut()
     }
 
-    pub fn schedule_next_interrupt(&mut self) {}
-
-    pub fn schedule_one_interrupt(&mut self, addr: u32, irqn: u32) {
+    pub fn schedule_next_interrupt(&mut self) -> bool {
         // We will schedule an interrupt to be pended at addr, with intno: irqn
         // Next, we will check if this interrupt can be activated. If it can, do the
         // steps for activation
         //
-        let nvic_intr = self.nvic.clone();
-        let active_hook_list = self.hook_list.clone();
-        let hook_id_rc = Rc::new(RefCell::new(None));
-        let hook_id_rc_clone = hook_id_rc.clone();
 
+        // Get UserData
+        let ud = self.get_mut_data();
+
+        // Get the next interrupt
+        let (irqn, addr) = match ud.get_next_interrupt() {
+            Ok(val) => val,
+            Err(_) => return false,
+        };
+
+        #[cfg(feature = "debug")]
+        {
+            println!("Scheduling interrupt: {} at address: {:#08x}", irqn, addr);
+        }
+
+        let nvic_intr = self.nvic.clone();
+        let stop_request_clone = self.stop_requested.clone();
         // Closure for the hook
-        let mut intr_harness = move |uc: &mut Unicorn<'_, T>, addr: u64, sz: u32| {
+        let mut intr_pend_hook = move |uc: &mut Unicorn<'_, T>, addr: u64, sz: u32| {
+            #[cfg(feature = "debug")]
+            {
+                println!("Interrupt hook: Address = {:#08x}, Size = {}", addr, sz);
+            }
+
             let mut nvic_borr = &mut *nvic_intr.borrow_mut();
-            let mut hook_list_mut = &mut *active_hook_list.borrow_mut();
+            let mut stop_request_ref = stop_request_clone.borrow_mut();
             nvic_borr.exc_pend(irqn, true);
+
+            #[cfg(feature = "debug")]
+            {
+                println!("After pend: {:#?}", *nvic_borr);
+            }
+
             let active = nvic_borr.maybe_activate_interrupt(uc);
-            let hook_id = hook_id_rc_clone.borrow().unwrap();
-            // We push the hook id to the hook list regardless of whether the interrupt was activated
-            hook_list_mut.push(hook_id);
+
+            // Stop emulation to schedule the next interrupt
+            *stop_request_ref = StopRequested::Interrupt;
+
+            #[cfg(feature = "debug")]
+            {
+                println!("Stopping emulation to schedule next interrupt");
+            }
+
+            uc.emu_stop().unwrap();
         };
 
         // Get hook ID
         let hook_id = self
             .uc
-            .add_code_hook(addr as u64, addr as u64, intr_harness)
+            .add_code_hook(addr as u64, addr as u64, intr_pend_hook)
             .unwrap();
 
         // Set hook id in the RefCell
-        *hook_id_rc.borrow_mut() = Some((hook_id, addr as u64));
+        self.last_hook = Some((hook_id, addr));
+        return true;
     }
 }

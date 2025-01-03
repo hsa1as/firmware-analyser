@@ -15,6 +15,7 @@ const ICSR_VECTPENDING_MASK: u32 = 0x1FF << 12;
 const ARMV7_MAX_INTERRUPTS: usize = 496;
 
 #[allow(non_snake_case)]
+#[derive(Debug)]
 pub struct ArmV7Nvic {
     vtor: u32,
     // ARMv7-M B3.4.6 - B3.4.7 Have registers to set/clear pend
@@ -154,6 +155,11 @@ impl ArmV7Nvic {
     }
 
     pub fn maybe_activate_interrupt<T>(&mut self, uc: &mut Unicorn<'_, T>) -> bool {
+        #[cfg(feature = "debug")]
+        {
+            println!("maybe_activate_interrupt");
+        }
+
         let mut irqn: u32 = 0;
         let mut prio: i16 = 256;
         let mut active_count: u64 = 0;
@@ -169,6 +175,11 @@ impl ArmV7Nvic {
             }
         }
         if (found) {
+            #[cfg(feature = "debug")]
+            {
+                println!("maybe_activate_interrupt: Activating interrupt: {}", irqn);
+            }
+
             self.set_current_irqn(Some(irqn));
             self.set_current_prio(prio);
             self.set_active_count(active_count);
@@ -180,6 +191,15 @@ impl ArmV7Nvic {
 }
 
 pub fn do_exc_entry<T>(uc: &mut Unicorn<'_, T>, irq_num: u32) -> Result<(), uc_error> {
+    #[cfg(feature = "debug")]
+    {
+        println!(
+            "do_exc_entry: irq_num: {} @ addr: {}",
+            irq_num,
+            uc.pc_read()?
+        );
+    }
+
     // Read current xPSR
     let xpsr = uc.reg_read(RegisterARM::XPSR)? as u32;
 
@@ -193,6 +213,19 @@ pub fn do_exc_entry<T>(uc: &mut Unicorn<'_, T>, irq_num: u32) -> Result<(), uc_e
     let r1 = uc.reg_read(RegisterARM::R1)?;
     let r0 = uc.reg_read(RegisterARM::R0)?;
     let new_sp = sp - 32;
+    #[cfg(feature = "debug")]
+    {
+        println!("do_exc_entry: sp: {:#010x}", sp);
+        println!("do_exc_entry: new_sp: {:#010x}", new_sp);
+        println!("do_exc_entry: r0: {:#010x}", r0);
+        println!("do_exc_entry: r1: {:#010x}", r1);
+        println!("do_exc_entry: r2: {:#010x}", r2);
+        println!("do_exc_entry: r3: {:#010x}", r3);
+        println!("do_exc_entry: r12: {:#010x}", r12);
+        println!("do_exc_entry: lr: {:#010x}", lr);
+        println!("do_exc_entry: pc: {:#010x}", pc);
+        println!("do_exc_entry: xpsr: {:#010x}", xpsr);
+    }
     uc.mem_write(new_sp, &u32::to_le_bytes(r0 as u32))?;
     uc.mem_write(new_sp + 4, &u32::to_le_bytes(r1 as u32))?;
     uc.mem_write(new_sp + 8, &u32::to_le_bytes(r2 as u32))?;
@@ -223,6 +256,11 @@ pub fn do_exc_entry<T>(uc: &mut Unicorn<'_, T>, irq_num: u32) -> Result<(), uc_e
 }
 
 pub fn do_exc_return<T>(uc: &mut Unicorn<'_, T>) -> Result<(), uc_error> {
+    #[cfg(feature = "debug")]
+    {
+        println!("do_exc_return");
+    }
+
     let sp = uc.reg_read(RegisterARM::SP)?;
     // get context
     let mut buffer = [0u8; 32];
@@ -235,6 +273,19 @@ pub fn do_exc_return<T>(uc: &mut Unicorn<'_, T>) -> Result<(), uc_error> {
     let lr = u32::from_le_bytes(buffer[20..24].try_into().unwrap());
     let pc = u32::from_le_bytes(buffer[24..28].try_into().unwrap());
     let xpsr = u32::from_le_bytes(buffer[28..32].try_into().unwrap());
+
+    #[cfg(feature = "debug")]
+    {
+        println!("do_exc_return: r0: {:#010x}", r0);
+        println!("do_exc_return: r1: {:#010x}", r1);
+        println!("do_exc_return: r2: {:#010x}", r2);
+        println!("do_exc_return: r3: {:#010x}", r3);
+        println!("do_exc_return: r12: {:#010x}", r12);
+        println!("do_exc_return: lr: {:#010x}", lr);
+        println!("do_exc_return: pc: {:#010x}", pc);
+        println!("do_exc_return: xpsr: {:#010x}", xpsr);
+    }
+
     uc.reg_write(RegisterARM::R0, r0 as u64)?;
     uc.reg_write(RegisterARM::R1, r1 as u64)?;
     uc.reg_write(RegisterARM::R2, r2 as u64)?;

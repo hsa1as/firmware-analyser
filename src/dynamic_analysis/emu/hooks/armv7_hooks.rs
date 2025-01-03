@@ -58,6 +58,12 @@ pub fn nvic_hook<T>(
     val: i64,
     nvic: &mut crate::dynamic_analysis::emu::hooks::interrupt::ArmV7Nvic,
 ) -> bool {
+    #[cfg(feature = "debug")]
+    {
+        println!("nvic_hook");
+        println!("Hit nvic hook with address = {loc:#08x} and size = {sz}");
+        println!("NVIC state: {nvic:#?}");
+    }
     if loc < 0xE000E100 && loc > 0xE000ECFC {
         println!(
             "This shouldn't have happened: armv7_nvic_hook called from acc to non-nvic address"
@@ -200,6 +206,12 @@ pub fn scb_hook<T>(
     val: i64,
     nvic: &mut crate::dynamic_analysis::emu::hooks::interrupt::ArmV7Nvic,
 ) -> bool {
+    #[cfg(feature = "debug")]
+    {
+        println!("scb_hook");
+        println!("Hit scb hook with address = {loc:#08x} and size = {sz}");
+    }
+
     // Interrupt control and status registers (ICSR)
     // ARMv7-M Technical reference manual, B3-655
     let mut write_val: u32 = 0;

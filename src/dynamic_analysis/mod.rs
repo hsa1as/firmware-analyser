@@ -21,7 +21,7 @@ use libafl::{
     fuzzer::{Fuzzer, StdFuzzer},
     generators::{Generator, RandBytesGenerator},
     inputs::BytesInput,
-    monitors::tui::TuiMonitor,
+    monitors::{tui::TuiMonitor, SimpleMonitor},
     mutators::{havoc_mutations, scheduled::StdScheduledMutator},
     observers::{CanTrack, ConstMapObserver, HitcountsMapObserver, TimeObserver},
     schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
@@ -39,9 +39,12 @@ pub use libafl_targets::EDGES_MAP_DEFAULT_SIZE as MAP_SIZE;
 
 // Emulator struct
 pub mod emu;
-use emu::input::{
-    CombinedInput, FuzzUserData, FuzzingInputGenerator, InputIterator, InputWrapper,
-    InterruptAddMutator, InterruptModifyMutator, InterruptRemoveMutator,
+use emu::{
+    input::{
+        CombinedInput, FuzzUserData, FuzzingInputGenerator, InputIterator, InputWrapper,
+        InterruptAddMutator, InterruptModifyMutator, InterruptRemoveMutator,
+    },
+    EmuExit,
 };
 
 // Tunable constants
@@ -61,8 +64,8 @@ pub fn test_emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
 
     let mut combined_input_gen = FuzzingInputGenerator::new(
         NonZeroUsize::new(0x100).unwrap(),
-        0x0,
-        0x20000000,
+        2480,
+        2490,
         MAX_NUM_INTERRUPTS,
     );
     let mut nop_state = NopState::<CombinedInput>::new();
@@ -99,11 +102,13 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
         emu.setup(&mut fileinfo.contents);
         let emu_result = emu.start_emu();
         match emu_result {
-            Ok(()) => ExitKind::Ok,
+            Ok(EmuExit::Timeout) => ExitKind::Timeout,
+            Ok(EmuExit::Ok) => ExitKind::Ok,
+            Ok(EmuExit::Crash) => ExitKind::Crash,
             Err(uc_error) => ExitKind::Crash,
         }
     };
-
+    // let monitor = SimpleMonitor::new(|s| println!("{s}"));
     let monitor = TuiMonitor::builder().title(String::from("Fuzzer")).build();
     let mut mgr = SimpleEventManager::new(monitor);
 
