@@ -165,7 +165,7 @@ impl ArmV7Nvic {
         let mut active_count: u64 = 0;
         let mut found: bool = false;
         for i in 0..ARMV7_MAX_INTERRUPTS {
-            if self.NVIC_Pending[i] {
+            if self.NVIC_Pending[i] && self.NVIC_ExcEnabled[i] {
                 if self.NVIC_ExcPrio[i] < prio {
                     prio = self.NVIC_ExcPrio[i];
                     irqn = i as u32;

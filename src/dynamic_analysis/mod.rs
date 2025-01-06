@@ -13,7 +13,7 @@ use unicorn_engine::unicorn_const::{Arch, Mode};
 // LibAFL imports
 #[allow(unused_imports)]
 use libafl::{
-    corpus::OnDiskCorpus,
+    corpus::{inmemory::InMemoryCorpus, OnDiskCorpus},
     events::{launcher::Launcher, EventConfig, SimpleEventManager},
     executors::{inprocess::InProcessExecutor, inprocess_fork::InProcessForkExecutor, ExitKind},
     feedback_or, feedback_or_fast,
@@ -134,7 +134,7 @@ pub fn start_fuzz_multicore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>
         let mut state = state.unwrap_or_else(|| {
             StdState::new(
                 StdRand::with_seed(current_nanos()),
-                OnDiskCorpus::new(PathBuf::from("./corpus")).unwrap(),
+                InMemoryCorpus::new(), //PathBuf::from("./corpus")).unwrap(),
                 OnDiskCorpus::new(PathBuf::from("./crashes")).unwrap(),
                 &mut feedback,
                 &mut objective,
