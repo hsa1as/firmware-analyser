@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 enum StopRequested {
+    InputOver,
     Interrupt,
     Crash,
     None,
@@ -50,14 +51,14 @@ impl<'a, T> Emulator<'a, T>
 where
     T: InputIterator + CanUpdateMap,
 {
-    pub fn new(arch: Arch, mode: Mode, ud: T) -> Emulator<'a, T> {
+    pub fn new(arch: Arch, mode: Mode, ud: T, timeout: u64) -> Emulator<'a, T> {
         let uc_n = Unicorn::new_with_data(arch, mode, ud).expect("Unable to create uc emulator");
         Emulator {
             uc: uc_n,
             arch,
             mode,
             entry_point: 0,
-            timeout: 10000,
+            timeout: timeout,
             count: 0,
             nvic: Rc::new(RefCell::new(ArmV7Nvic::new())),
             stop_requested: Rc::new(RefCell::new(StopRequested::None)),
@@ -268,12 +269,13 @@ where
         let mut res = self
             .uc
             .emu_start(self.entry_point, 0x1FFFFFFF, rem, self.count as usize);
-
-        let elapsed = now.elapsed().as_micros() as u64;
-        rem = match rem.checked_sub(elapsed) {
-            Some(v) => v,
-            None => return Ok(EmuExit::Timeout),
-        };
+        if (self.timeout != 0) {
+            let elapsed = now.elapsed().as_micros() as u64;
+            rem = match rem.checked_sub(elapsed) {
+                Some(v) => v,
+                None => return Ok(EmuExit::Timeout),
+            };
+        }
 
         // Delete last intr hook if it exists
         match self.last_hook {
@@ -314,15 +316,20 @@ where
             self.schedule_next_interrupt();
 
             // Restart emulation
-            now = Instant::now();
+            if (self.timeout != 0) {
+                now = Instant::now();
+            }
             res = self
                 .uc
                 .emu_start(self.entry_point, 0x1FFFFFFF, rem, self.count as usize);
-            let elapsed = now.elapsed().as_micros() as u64;
-            rem = match rem.checked_sub(elapsed) {
-                Some(v) => v,
-                None => return Ok(EmuExit::Timeout),
-            };
+
+            if (self.timeout != 0) {
+                let elapsed = now.elapsed().as_micros() as u64;
+                rem = match rem.checked_sub(elapsed) {
+                    Some(v) => v,
+                    None => return Ok(EmuExit::Timeout),
+                };
+            }
 
             // Check exit status
             temp = self.stop_requested.borrow().clone();
@@ -334,6 +341,7 @@ where
         match temp {
             StopRequested::Crash => Ok(EmuExit::Crash),
             StopRequested::None => Ok(EmuExit::Ok),
+            StopRequested::InputOver => Ok(EmuExit::Ok),
             StopRequested::Interrupt => panic!("Interrupt requested after emulation exit"),
         }
     }
@@ -353,8 +361,8 @@ where
 
         // Get the next interrupt
         let (irqn, addr) = match ud.get_next_interrupt() {
-            Ok(val) => val,
-            Err(_) => return false,
+            Some(val) => val,
+            None => return false,
         };
 
         #[cfg(feature = "debug")]

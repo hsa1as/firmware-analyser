@@ -33,7 +33,13 @@ where
 {
     if acc_type == MemType::READ {
         let data = uc.get_data_mut();
-        let word = data.get_next_word();
+        let word = match data.get_next_word() {
+            Some(v) => v,
+            None => {
+                uc.emu_stop();
+                return true;
+            }
+        };
         uc.mem_write(loc, &word)
             .expect("Couldn't write AFL input to memory");
         let word_as_u32 = u32::from_le_bytes(word);

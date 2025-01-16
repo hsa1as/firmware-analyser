@@ -25,8 +25,8 @@ pub use crate::dynamic_analysis::emu::hooks::common_hooks::CanUpdateMap;
 use crate::dynamic_analysis::MAX_NUM_INTERRUPTS;
 
 pub trait InputIterator {
-    fn get_next_word(&mut self) -> [u8; 4];
-    fn get_next_interrupt(&mut self) -> Result<(u32, u32), i32>;
+    fn get_next_word(&mut self) -> Option<[u8; 4]>;
+    fn get_next_interrupt(&mut self) -> Option<(u32, u32)>;
 }
 
 // CombinedInput to hold input for peripheral reads, addresses for interrupts, and interrupt numbers
@@ -84,9 +84,9 @@ impl<'a> From<&'a CombinedInput> for InputWrapper<'a> {
 }
 
 impl<'a> InputIterator for InputWrapper<'a> {
-    fn get_next_word(&mut self) -> [u8; 4] {
+    fn get_next_word(&mut self) -> Option<[u8; 4]> {
         if self.bytes.is_empty() {
-            return [0, 0, 0, 0];
+            return None;
         }
         let mut a: [u8; 4] = [0, 0, 0, 0];
         let mut i: usize = 0;
@@ -95,15 +95,15 @@ impl<'a> InputIterator for InputWrapper<'a> {
             self.idx_bytes += 1;
             i += 1;
         }
-        a
+        Some(a)
     }
-    fn get_next_interrupt(&mut self) -> Result<(u32, u32), i32> {
+    fn get_next_interrupt(&mut self) -> Option<(u32, u32)> {
         if self.idx_intrs >= self.intr_addrs.len() {
-            return Err(-1);
+            return None;
         }
         let retval = self.intr_addrs[self.idx_intrs];
         self.idx_intrs = self.idx_intrs.checked_add(1).expect("You had one job");
-        return Ok(retval);
+        return Some(retval);
     }
 }
 
@@ -330,11 +330,11 @@ impl<'a> CanUpdateMap for FuzzUserData<'a, &'a mut [u8]> {
 }
 
 impl<'a, CM> InputIterator for FuzzUserData<'a, CM> {
-    fn get_next_word(&mut self) -> [u8; 4] {
+    fn get_next_word(&mut self) -> Option<[u8; 4]> {
         self.input_object.get_next_word()
     }
 
-    fn get_next_interrupt(&mut self) -> Result<(u32, u32), i32> {
+    fn get_next_interrupt(&mut self) -> Option<(u32, u32)> {
         self.input_object.get_next_interrupt()
     }
 }
