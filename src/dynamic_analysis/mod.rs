@@ -1,4 +1,4 @@
-use crate::FileInfo;
+use crate::{Args, FileInfo};
 
 // Standard imports
 use core::num::NonZeroUsize;
@@ -20,7 +20,7 @@ use libafl::{
     feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback},
     fuzzer::{Fuzzer, StdFuzzer},
     generators::{Generator, RandBytesGenerator},
-    inputs::BytesInput,
+    inputs::{BytesInput, Input},
     monitors::{tui::TuiMonitor, SimpleMonitor},
     mutators::{havoc_mutations, scheduled::StdScheduledMutator},
     observers::{CanTrack, ConstMapObserver, HitcountsMapObserver, TimeObserver},
@@ -52,7 +52,7 @@ use emu::{
 pub const MAX_NUM_INTERRUPTS: u32 = 25;
 
 #[allow(non_snake_case, unused_variables, unused_mut)]
-pub fn test_emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
+pub fn test_emulate(mut fileinfo: FileInfo, args: Args) -> Result<(), Box<dyn Error>> {
     // Create edge map
     let mut shmem_provider = unix_shmem::UnixShMemProvider::new().unwrap();
     let mut EDGES = shmem_provider.new_shmem(MAP_SIZE).unwrap();
@@ -63,17 +63,11 @@ pub fn test_emulate(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>> {
     .unwrap();
     let EDGES_MAP = EDGES.as_slice_mut();
 
-    let mut combined_input_gen = FuzzingInputGenerator::new(
-        NonZeroUsize::new(0x100).unwrap(),
-        2480,
-        2490,
-        MAX_NUM_INTERRUPTS,
-    );
-    let mut nop_state = NopState::<CombinedInput>::new();
-    let mut combined_input = combined_input_gen.generate(&mut nop_state).unwrap();
-    println!("Generated input: {:?}", combined_input);
+    // Generate CombinedInput object from the file
+    let combined_input =
+        CombinedInput::from_file(&args.input_file).expect("Unable to read input from file");
+
     let mut ud = InputWrapper::from(&combined_input);
-    println!("InputWrapper: {:?}", ud);
     let mut fud = FuzzUserData::new(ud, EDGES_MAP, MAP_SIZE as u64);
     let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, fud);
     emu.setup(&mut fileinfo.contents);
@@ -326,12 +320,12 @@ pub fn start_fuzz_singlecore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-pub fn run(fileinfo: FileInfo, fuzz: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(args: Args, fileinfo: FileInfo, fuzz: bool) -> Result<(), Box<dyn Error>> {
     if fuzz {
         //start_fuzz_singlecore(fileinfo).expect("Fuzzing failed");
         start_fuzz_multicore(fileinfo).expect("Fuzzing failed");
     } else {
-        test_emulate(fileinfo).expect("Emulation failed");
+        test_emulate(fileinfo, args).expect("Emulation failed");
     }
     Ok(())
 }

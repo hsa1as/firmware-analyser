@@ -22,6 +22,10 @@ pub struct Args {
     // Analysis type
     #[arg(value_enum, short, long)]
     mode: AnalysisMode,
+
+    // Input file name, used only with pure emulation
+    #[arg(default_value = "", short, long)]
+    input_file: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -65,10 +69,10 @@ pub fn run(args: Args) -> Result<(), Box<dyn Error>> {
             let _ = static_analysis::run(fileinfo);
         }
         AnalysisMode::Dynamic => {
-            let _ = dynamic_analysis::run(fileinfo, true);
+            let _ = dynamic_analysis::run(args, fileinfo, true);
         }
         AnalysisMode::Emulate => {
-            let _ = dynamic_analysis::run(fileinfo, false);
+            let _ = dynamic_analysis::run(args, fileinfo, false);
         }
     }
     Ok(())
