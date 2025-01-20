@@ -259,7 +259,9 @@ where
 
     pub fn start_emu(&mut self) -> Result<EmuExit, uc_error> {
         // Schedule first interrupt to arrive
-        self.schedule_next_interrupt();
+        if (!self.schedule_next_interrupt()) {
+            return Ok(EmuExit::Ok);
+        }
 
         // Setup timers
         let mut now = Instant::now();
@@ -313,7 +315,9 @@ where
             }
 
             // Schedule next interrupt
-            self.schedule_next_interrupt();
+            if (!self.schedule_next_interrupt()) {
+                return Ok(EmuExit::Ok);
+            }
 
             // Restart emulation
             if (self.timeout != 0) {
@@ -348,6 +352,10 @@ where
 
     pub fn get_mut_data(&mut self) -> &mut T {
         self.uc.get_data_mut()
+    }
+
+    pub fn get_uc_handle(&mut self) -> &mut unicorn_engine::Unicorn<'a, T> {
+        &mut self.uc
     }
 
     pub fn schedule_next_interrupt(&mut self) -> bool {

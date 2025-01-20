@@ -69,10 +69,14 @@ pub fn test_emulate(mut fileinfo: FileInfo, args: Args) -> Result<(), Box<dyn Er
 
     let mut ud = InputWrapper::from(&combined_input);
     let mut fud = FuzzUserData::new(ud, EDGES_MAP, MAP_SIZE as u64);
-    let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, fud, 0);
+    let mut emu = emu::Emulator::new(Arch::ARM, Mode::LITTLE_ENDIAN, fud, 10000);
     emu.setup(&mut fileinfo.contents);
     let emu_result = emu.start_emu();
     println!("Emulation result: {:?}", emu_result);
+    println!(
+        "Stopped at pc : {:?}",
+        emu.get_uc_handle().pc_read().unwrap()
+    );
     Ok(())
 }
 
@@ -128,7 +132,7 @@ pub fn start_fuzz_multicore(mut fileinfo: FileInfo) -> Result<(), Box<dyn Error>
         let mut state = state.unwrap_or_else(|| {
             StdState::new(
                 StdRand::with_seed(current_nanos()),
-                InMemoryCorpus::new(), //PathBuf::from("./corpus")).unwrap(),
+                OnDiskCorpus::new(PathBuf::from("./corpus")).unwrap(), //InMemoryCorpus::new(), //PathBuf::from("./corpus")).unwrap(),
                 OnDiskCorpus::new(PathBuf::from("./crashes")).unwrap(),
                 &mut feedback,
                 &mut objective,
