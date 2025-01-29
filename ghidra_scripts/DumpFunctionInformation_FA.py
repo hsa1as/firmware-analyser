@@ -16,13 +16,10 @@ import ssdeep
 import pyhidra
 import sys
 import tlsh
-# Get Jpype to ghidra
-pyhidra.start()
-import ghidra
-from ghidra.app.util.headless import HeadlessAnalyzer
-from ghidra.base.project import GhidraProject
-from java.lang import String
+import argparse
 
+
+'''
 # Set FIRMAL_DIR in env for output file location
 if 'FIRMAL_DIR' not in os.environ:
 	print("ERROR: env FIRMAL_DIR not set. Set FIRMAL_DIR for output directory")
@@ -32,27 +29,68 @@ if 'FIRMAL_DIR' not in os.environ:
 op_path = os.environ['FIRMAL_DIR']
 if op_path[-1] != "/":
 	op_path += "/"
+'''
+
+# Setup argument parsing
+parser = argparse.ArgumentParser(prog='FiVB',
+                                 description='Extract and compare functions in a given file using ghidra',
+                                 epilog="Optionally include *.vuln file for each file added to a database, for information on vulnerable functions.\n\
+                                        The *.vuln file should contain a list of addresses, one per line, of vulnerable functions in the file, followed by \
+                                        a whitespace and an optional description")
+parser.add_argument('-d', '--db', help='Path to sqlite3 db file', required=False)
+parser.add_argument('-f', '--filenames', help='Files to be analysed', required=True, action='extend', nargs="+")
+parser.add_argument('-a', '--arch', help='Architecture of the file to be analysed, represented as a ghidra language string', default="ARM:LE:32:Cortex")
+parser.add_argument('-m', '--match', help='Set if only matching, and not adding to the database', action='store_true')
+
+# Parse arguments
+args = vars(parser.parse_args())
+db_path = args['db']
+lang = args['arch']
+matching = args['match']
+files = args["filenames"]
 
 # Get conn to db and create table if it doesn't already exist
-hashdb = sqlite3.connect(op_path + "tslh_hash.db")
+hashdb = sqlite3.connect(db_path)
 cur = hashdb.cursor()
 res = cur.execute("SELECT name FROM sqlite_master WHERE name='hashdump'")
 if(res.fetchone() is None):
-    cur.execute("CREATE TABLE hashdump(size, progname, progpath, funcname, vaddr, fileoff, hash)")
-files = sys.argv[1:]
+    cur.execute("CREATE TABLE hashdump(size, progname, progpath, funcname, vaddr, fileoff, hash, vulnerable, vuln_desc)")
+
+# Get Jpype to ghidra
+pyhidra.start()
+import ghidra
+from ghidra.app.util.headless import HeadlessAnalyzer
+from ghidra.base.project import GhidraProject
+from ghidra.program.model.block import BasicBlockModel
+from ghidra.util.task import ConsoleTaskMonitor
+from java.lang import String
+
+
 for filename in files:
-# Open program
+    vulns = {}
+    # Check if we have a list of vulnerable functions for this file
+    if((not matching) and os.path.isfile(filename + ".vuln")):
+        # We expect file with an address on each line, followed by a whitespace and an optional description
+        with open(filename + ".vuln", "r") as f:
+            for line in f:
+                parts = line.split(" ", 1)
+                vulns[int(parts[0], 16)] = parts[1]
+
+    # Open program
     with pyhidra.open_program(filename,project_location=None,project_name=None,
                               analyze=False,
-                              language=None) as flat_api: # ARM:LE:32:Cortex
+                              language=lang) as flat_api: # ARM:LE:32:Cortex
         cp = flat_api.getCurrentProgram()
+        blockModel = BasicBlockModel(cp)
+        monitor = ConsoleTaskMonitor()
+
         ctx = {}
         ctx["ARCH"] = None #cp.getLanguage().toString().split("/")[0]
         ctx["BITS"] = cp.getLanguage().toString().split("/")[2]
-        ctx["DBPATH"] = op_path+"hash.db"
+        ctx["DBPATH"] = db_path
         ctx["FILEPATH"] = cp.getExecutablePath()
-# Let script be run on headless mode with -noanalyse flag
-# Set minimum number of analysis options
+
+        # Set minimum number of analysis options
         #from ghidra.app.script.GhidraScript import getCurrentAnalysisOptionsAndValues
         #opts = getCurrentAnalysisOptionsAndValues(cp)
         #for x in opts:
@@ -62,7 +100,7 @@ for filename in files:
         #setAnalysisOptions(cp, opts)
         flat_api.analyze(cp)
 
-# Get required objects from ghidra's java hell
+        # Get required objects from ghidra
         funcs = cp.getFunctionManager().getFunctions(True)
         addr = cp.getAddressFactory()
         mem = cp.getMemory()
@@ -100,7 +138,6 @@ for filename in files:
             # Architecture specific code follows.
             # Register and memory masking is implemented for ARM only
             if(ctx["ARCH"] == "ARM" or ctx["ARCH"] == None):
-                # Deconstructing arm is easier than other archs i hope
 
                 # 4 byte instruction:
                 if(len(code_bytes) == 4):
@@ -124,32 +161,59 @@ for filename in files:
                 code_bytes.extend(process_instruction(instruction))
                 instruction = instruction.getNext()
 
+            # Construct graph from BBs
+            # Dictionary key is the address of the block, and the value is a tuple
+            # (Destinations: List[int], FlowType: String, hash: String)
+            bbs = {}
+            curBlocks = blockModel.getCodeBlocksContaining(func.getBody(), monitor)
+            while curBlocks.hasNext():
+                bb = curBlocks.next()
+                code_bytes_bb = []
+                instruction = flat_api.getInstructionAt(bb.getFirstStartAddress())
+                while(instruction.getMinAddress() <= bb.getMaxAddress()):
+                    code_bytes_bb.extend(process_instruction(instruction))
+                    instruction = instruction.getNext()
+                dests = bb.getDestinations(monitor)
+                bbs[int(bb.getFirstStartAddress().toString(), 16)] = (
+                    [int(x, 16) for x in [dests.next().getDestinationBlock().getFirstStartAddress().toString() for i in range(bb.getNumDestinations(monitor))]],
+                    bb.getFlowType().toString(),
+                    ssdeep.hash(bytes(code_bytes_bb))
+                )
+            print(bbs)
+
+
             result = {}
             result["name"] = func.getName()
             entrypoint = func.getEntryPoint()
             result["vaddr"] = "0x" + entrypoint.toString()
             result["fileoffset"] = str(mem.getAddressSourceInfo(entrypoint).getFileOffset())
-# For size to work, ghidra analysis should be run
-# In case ghidra did not run analysis, the returned size is always 1
+            # For size to work, ghidra analysis should be run
+            # In case ghidra did not run analysis, the returned size is always 1
             result["size"] = str(func.getBody().getNumAddresses())
-# Get function bytes out of a stupid java object
+            # Get function bytes out of java object
             result["hash"] = tlsh.hash(bytes(code_bytes))
-            row = (result['size'], cp.getName(), cp.getExecutablePath(), result['name'], result['vaddr'], result['fileoffset'], result['hash'])
+            result["vulnerable"] = True if int(entrypoint.toString(), 16) in vulns else False
+            result["vuln_desc"] = vulns.get(int(entrypoint.toString(), 16), "")
+            row = (result['size'], cp.getName(), cp.getExecutablePath(), result['name'], result['vaddr'],
+                   result['fileoffset'], result['hash'], result["vulnerable"], result["vuln_desc"])
             return row
 
         data = []
         for func in funcs:
             if(func.isThunk()):
                 continue
-            data.append(process_function(func, cur))
-            if(len(data) > 1000):
-                cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
-                data.clear()
+            if(not matching):
+                # We are building the database, so update data, and insert if required
+                data.append(process_function(func, cur))
+                if(len(data) > 1000):
+                    cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)", data)
+                    data.clear()
 
-
-        cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?)", data)
-        data.clear()
-        hashdb.commit()
+        # Flush remaining entries in data
+        if(not matching):
+            cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)", data)
+            data.clear()
+            hashdb.commit()
 
 hashdb.close()
 
