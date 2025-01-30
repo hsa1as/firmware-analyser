@@ -169,15 +169,15 @@ for filename in files:
 
                 # 4 byte instruction:
                 if(len(code_bytes_instr) == 4):
-                    code_bytes = mask_ARM(instruction)
+                    code_bytes_instr = mask_ARM(instruction)
 
                 # 2 Byte instruction (thumb)
                 if(len(code_bytes_instr) == 2):
-                    code_bytes = mask_ARM_THUMB(instruction)
+                    code_bytes_instr = mask_ARM_THUMB(instruction)
             else:
                 print("Unknown Architecture for process_instruction. Falling back to no masking")
 
-            return code_bytes
+            return code_bytes_instr
         def process_function(func, cur):
             # Perform adress masking
             # Get first instruction and iterate
