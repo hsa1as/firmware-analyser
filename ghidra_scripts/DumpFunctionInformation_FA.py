@@ -39,15 +39,44 @@ parser = argparse.ArgumentParser(prog='FiVB',
                                         a whitespace and an optional description")
 parser.add_argument('-d', '--db', help='Path to sqlite3 db file', required=False)
 parser.add_argument('-f', '--filenames', help='Files to be analysed', required=True, action='extend', nargs="+")
-parser.add_argument('-a', '--arch', help='Architecture of the file to be analysed, represented as a ghidra language string', default="ARM:LE:32:Cortex")
-parser.add_argument('-m', '--match', help='Set if only matching, and not adding to the database', action='store_true')
+parser.add_argument('-a', '--arch', help='Architecture of the file to be analysed, represented as a ghidra language string, defaults to ARM:LE:32:Cortex', default="ARM:LE:32:Cortex")
+parser.add_argument('-b', '--build', help='Set if blocks need to be added to the database', action='store_false')
+parser.add_argument('-fn', '--func_name', help='Name of the function to be analysed', required=False)
+parser.add_argument('-t', '--threshold', help='Threshold for fuzzy hashing. Defaults to a difference of 10', required=False)
 
 # Parse arguments
 args = vars(parser.parse_args())
 db_path = args['db']
 lang = args['arch']
-matching = args['match']
+matching = args['build']
 files = args["filenames"]
+func_name = args["func_name"]
+threshold = args["threshold"]
+
+print("Decompiling with language = " + lang)
+
+# Parser checks
+if(func_name is not None and len(files) > 1):
+    parser.error("func_name can only be specified for a single file")
+if(func_name is not None and not matching):
+    parser.error("func_name can only be specified when matching is being performed")
+if(threshold is not None and not matching):
+    parser.error("threshold can only be specified when matching is being performed")
+
+if(matching):
+    threshold = 10
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 # Get conn to db and create table if it doesn't already exist
 hashdb = sqlite3.connect(db_path)
@@ -85,7 +114,7 @@ for filename in files:
         monitor = ConsoleTaskMonitor()
 
         ctx = {}
-        ctx["ARCH"] = None #cp.getLanguage().toString().split("/")[0]
+        ctx["ARCH"] = cp.getLanguage().toString().split("/")[0]
         ctx["BITS"] = cp.getLanguage().toString().split("/")[2]
         ctx["DBPATH"] = db_path
         ctx["FILEPATH"] = cp.getExecutablePath()
@@ -101,7 +130,6 @@ for filename in files:
         flat_api.analyze(cp)
 
         # Get required objects from ghidra
-        funcs = cp.getFunctionManager().getFunctions(True)
         addr = cp.getAddressFactory()
         mem = cp.getMemory()
 
@@ -134,17 +162,17 @@ for filename in files:
             return masked_bytes
 
         def process_instruction(instruction):
-            code_bytes = bytes(map(lambda b: b &0xff, instruction.getBytes()))
+            code_bytes_instr = bytes(map(lambda b: b &0xff, instruction.getBytes()))
             # Architecture specific code follows.
             # Register and memory masking is implemented for ARM only
             if(ctx["ARCH"] == "ARM" or ctx["ARCH"] == None):
 
                 # 4 byte instruction:
-                if(len(code_bytes) == 4):
+                if(len(code_bytes_instr) == 4):
                     code_bytes = mask_ARM(instruction)
 
                 # 2 Byte instruction (thumb)
-                if(len(code_bytes) == 2):
+                if(len(code_bytes_instr) == 2):
                     code_bytes = mask_ARM_THUMB(instruction)
             else:
                 print("Unknown Architecture for process_instruction. Falling back to no masking")
@@ -155,8 +183,9 @@ for filename in files:
             # Get first instruction and iterate
             code_bytes = []
             instruction = flat_api.getFirstInstruction(func)
+
             while instruction is not None:
-                if(instruction.getMaxAddress() > func.getBody().getMaxAddress()):
+                if(int(instruction.getMaxAddress().toString(), 16) > int(func.getBody().getMaxAddress().toString(), 16)):
                     break
                 code_bytes.extend(process_instruction(instruction))
                 instruction = instruction.getNext()
@@ -170,8 +199,10 @@ for filename in files:
                 bb = curBlocks.next()
                 code_bytes_bb = []
                 instruction = flat_api.getInstructionAt(bb.getFirstStartAddress())
-                while(instruction.getMinAddress() <= bb.getMaxAddress()):
+                while(instruction.getMaxAddress() <= bb.getMaxAddress()):
                     code_bytes_bb.extend(process_instruction(instruction))
+                    if(instruction.getMaxAddress() == bb.getMaxAddress()):
+                        break
                     instruction = instruction.getNext()
                 dests = bb.getDestinations(monitor)
                 bbs[int(bb.getFirstStartAddress().toString(), 16)] = (
@@ -179,11 +210,11 @@ for filename in files:
                     bb.getFlowType().toString(),
                     ssdeep.hash(bytes(code_bytes_bb))
                 )
-            print(bbs)
 
 
             result = {}
             result["name"] = func.getName()
+            result["hash"] = tlsh.hash(bytes(code_bytes))
             entrypoint = func.getEntryPoint()
             result["vaddr"] = "0x" + entrypoint.toString()
             result["fileoffset"] = str(mem.getAddressSourceInfo(entrypoint).getFileOffset())
@@ -191,26 +222,60 @@ for filename in files:
             # In case ghidra did not run analysis, the returned size is always 1
             result["size"] = str(func.getBody().getNumAddresses())
             # Get function bytes out of java object
-            result["hash"] = tlsh.hash(bytes(code_bytes))
             result["vulnerable"] = True if int(entrypoint.toString(), 16) in vulns else False
             result["vuln_desc"] = vulns.get(int(entrypoint.toString(), 16), "")
             row = (result['size'], cp.getName(), cp.getExecutablePath(), result['name'], result['vaddr'],
                    result['fileoffset'], result['hash'], result["vulnerable"], result["vuln_desc"])
             return row
 
-        data = []
-        for func in funcs:
-            if(func.isThunk()):
-                continue
-            if(not matching):
+        funcs = cp.getFunctionManager().getFunctions(True)
+        if(matching):
+            func = None
+            while(funcs.hasNext()):
+                func = funcs.next()
+                if(func.isThunk()):
+                    continue
+                if(func.getName() == func_name):
+                    break
+            if(func is None):
+                print("Function not found")
+                exit(-1)
+            row = process_function(func, cur)
+            res = cur.execute("SELECT * FROM hashdump")
+            db_func = res.fetchone()
+            while db_func:
+                if(db_func[6] == 'TNULL'):
+                    db_func = res.fetchone()
+                    continue
+                match = None
+                try:
+                    match = tlsh.diffxlen(row[6], db_func[6])
+                except:
+                    db_func = res.fetchone()
+                    continue
+                if(db_func[6] == row[6] or (match is not None and match <= threshold)):
+                    print("{bcolors.HEADER}Match found for function: " + func_name + " in " + row[2] + " with " + db_func[3] + " in " + db_func[2] + "{bcolors.ENDC}")
+                    print("Matches with a match distance of " + str(match))
+                    if(db_func[-2]):
+                        print("{bcolors.WARNING}Function " + func_name + " may be vulnearble{bcolors.ENDC}")
+                        print("{bcolors.WARNING}Vulnerability description: " + db_func[-1] + "{bcolors.ENDC}")
+                db_func = res.fetchone()
+
+
+
+
+        if(not matching):
+            data = []
+            for func in funcs:
+                if(func.isThunk()):
+                    continue
                 # We are building the database, so update data, and insert if required
                 data.append(process_function(func, cur))
                 if(len(data) > 1000):
                     cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)", data)
                     data.clear()
 
-        # Flush remaining entries in data
-        if(not matching):
+            # Flush remaining entries in data
             cur.executemany("INSERT INTO hashdump VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)", data)
             data.clear()
             hashdb.commit()
