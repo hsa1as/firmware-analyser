@@ -26,15 +26,19 @@ pub struct Args {
     // Input file name, used only with pure emulation
     #[arg(default_value = "", short, long)]
     input_file: String,
+
+    // Config file name, JSON
+    #[arg(default_value = "", short, long)]
+    config_file: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
 enum AnalysisMode {
-    // Fuzzy-hash matching
+    // Static Analyis
     Static,
 
-    // Dynamic analysis
-    Dynamic,
+    // Fuzzing
+    Fuzz,
 
     // Pure emulation
     Emulate,
@@ -56,23 +60,23 @@ impl FileInfo {
         self.contents = vec![0; self.size as usize];
         file_obj
             .read_exact(&mut self.contents)
-            .expect("Error while Reading");
+            .expect("Error while Reading file {self.name}");
     }
 }
 
 pub fn run(args: Args) -> Result<(), Box<dyn Error>> {
-    let mut fileinfo = FileInfo::default();
-    fileinfo.init(&args.file_name);
+    let mut firmwarefile = FileInfo::default();
+    firmwarefile.init(&args.file_name);
 
     match args.mode {
         AnalysisMode::Static => {
-            let _ = static_analysis::run(fileinfo);
+            let _ = static_analysis::run(firmwarefile);
         }
-        AnalysisMode::Dynamic => {
-            let _ = dynamic_analysis::run(args, fileinfo, true);
+        AnalysisMode::Fuzz => {
+            let _ = dynamic_analysis::run(args, firmwarefile, true);
         }
         AnalysisMode::Emulate => {
-            let _ = dynamic_analysis::run(args, fileinfo, false);
+            let _ = dynamic_analysis::run(args, firmwarefile, false);
         }
     }
     Ok(())

@@ -85,7 +85,7 @@ impl<'a> From<&'a CombinedInput> for InputWrapper<'a> {
 
 impl<'a> InputIterator for InputWrapper<'a> {
     fn get_next_word(&mut self) -> Option<[u8; 4]> {
-        if self.bytes.is_empty() {
+        if self.idx_bytes >= self.bytes.len() {
             return None;
         }
         let mut a: [u8; 4] = [0, 0, 0, 0];

@@ -192,6 +192,9 @@ where
                 self.uc
                     .add_mem_hook(HookType::MEM_ALL, 0xE000E100, 0xE000ECFC, handle_nvic_acc);
 
+                self.uc
+                    .add_mem_hook(HookType::MEM_ALL, 0xE000ED00, 0xE000ED8C, handle_scb_acc);
+
                 // Setup EXC_RETURN hook, use intr_hook, interrupt number 8 as documented in unicorn
                 // FAQ
                 // fetch_prot hook is not required see : https://github.com/unicorn-engine/unicorn/blob/dev/docs/FAQ.md#how-to-emulate-interrupts-or-ticks-with-unicorn

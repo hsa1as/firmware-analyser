@@ -31,12 +31,12 @@ pub fn block_hook<T: CanUpdateMap>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
         PREV = loc >> 1;
     }
     #[cfg(feature = "debug")]
-    println!("Block hook : Address = {loc:#08x}, Size = {sz}");
+    eprintln!("Block hook : Address = {loc:#08x}, Size = {sz}");
 }
 
 pub fn code_hook<T>(uc: &mut Unicorn<'_, T>, loc: u64, sz: u32) {
     println!("Code hook : Address = {loc:#08x}, Size = {sz}");
-    eprintln!("{loc:#10x}, {sz}, []");
+    println!("{loc:#10x}, {sz}, []");
 }
 
 pub fn insn_invalid_hook<T>(uc: &mut Unicorn<'_, T>) -> bool {
